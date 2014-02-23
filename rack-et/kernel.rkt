@@ -98,11 +98,13 @@
 ;; it would have to duplicate some of the function calling code, if
 ;; not for this approach. Finally, this is an example of how
 ;; primitives will be statically broken into different categories
-;; based on what they do: pure, reader, writer, unpredictable.
+;; based on what they do: pure, reader, writer, unpredictable. It
+;; would be nice, however, to clarify that this is pure provided
+;; generator is pure, but I suppose that's not really meaningful
 (define (prim:st:call-with-values vs s k)
   (match-define (vector generator receiver) vs)
   (rack:apply generator (vector) s
-              (rack:k #f k mt-ms
+              (rack:k mt-e k mt-ms
                       (rack:kf:call-with-values:values
                        receiver))))
 
@@ -116,8 +118,6 @@
          (params rest-param body))
 (structt rack:expr:if0 rack:expr
          (test zero nonzero))
-(structt rack:expr:let-values rack:expr
-         (ids vals body))
 (structt rack:expr:quote rack:expr
          (datum))
 (structt rack:expr:wcm rack:expr
@@ -146,6 +146,7 @@
 (structt rack:vstate
          (vals store kont))
 
+(define mt-e (hasheq))
 (define mt-ms (hash))
 
 (structt rack:k (e k ms f))
@@ -160,8 +161,6 @@
 (structt rack:kf ())
 (structt rack:kf:if0 rack:kf
          (zero nonzero))
-(structt rack:kf:let-values rack:kf
-         (ids body))
 (structt rack:kf:wcm:key rack:kf
          (val body))
 (structt rack:kf:wcm:val rack:kf
@@ -200,15 +199,18 @@
     [(rack:val:prim:v prim)
      (rack:vstate (prim vals) s k)]
     [(rack:val:prim:st prim)
+     ;;; xxx get and provide e?
      (prim vals s k)]))
 
 (define (rack:state:app fun rvals args e s k)
   (match args
     [(list)
      (define vals (list->vector (reverse rvals)))
+     ;;; xxx provide e?
      (rack:apply fun vals s k)]
     [(cons arg args)
      (rack:cstate arg e s
+                  ;;; xxx shrink e
                   (rack:k e k mt-ms
                           (rack:kf:app:args fun rvals args)))]))
 
@@ -217,23 +219,23 @@
     [(rack:cstate c e s k)
      (match c
        [(rack:expr:lambda params rest-param body)
+        ;;; xxx shrink e
         (rack:vstate (vector (rack:val:clo e c)) s k)]
        [(rack:expr:if0 test zero nonzero)
         (rack:cstate test e s
+                     ;;; xxx shrink e given zero/nonzero
                      (rack:k e k mt-ms
                              (rack:kf:if0 zero nonzero)))]
-       [(rack:expr:let-values ids vals body)
-        (rack:cstate vals e s
-                     (rack:k e k mt-ms
-                             (rack:kf:let-values ids body)))]
        [(rack:expr:quote d)
         (rack:vstate (vector d) s k)]
        [(rack:expr:wcm mk mv body)
         (rack:cstate mk e s
+                     ;;; xxx shrink e
                      (rack:k e k mt-ms
                              (rack:kf:wcm:key mv body)))]
        [(rack:expr:app fun args)
         (rack:cstate fun e s
+                     ;;; xxx shrink e
                      (rack:k e k mt-ms
                              (rack:kf:app:fun args)))]
        [(rack:expr:ref v)
@@ -253,14 +255,8 @@
             [_
              nonzero]))
         (rack:cstate next e s k)]
-       [(rack:kf:let-values ids body)
-        (define e+
-          (for/fold ([e+ e])
-              ([i (in-vector ids)]
-               [v (in-vector vs)])
-            (hash-set e+ i v)))
-        (rack:cstate body e+ s k)]
        [(rack:kf:wcm:key mv body)
+        ;;; xxx shrink second e?
         (rack:cstate mv e s (rack:k e k mt-ms (rack:kf:wcm:val (v) body)))]
        [(rack:kf:wcm:val mk body)
         (rack:cstate body e s (k-mark-set k mk (v)))]
@@ -271,6 +267,7 @@
        [(rack:kf:app:args fun rvals (cons arg args))
         (rack:cstate
          arg e s
+         ;;; xxx shrink e
          (rack:k e k mt-ms
                  (rack:kf:app:args fun (cons (v) rvals) args)))]
        [(rack:kf:call-with-values:values receiver)
@@ -287,7 +284,7 @@
     (step* st-p)))
 
 (define (inject c)
-  (rack:cstate c (hasheq) (make-gvector) (rack:k:top)))
+  (rack:cstate c mt-e (make-gvector) (rack:k:top)))
 
 (module+ test
   (require rackunit)
@@ -322,11 +319,6 @@
    [(rack:expr:app (rack:expr:quote (rack:val:prim:v prim:v:values))
                    (list))
     (vector)]
-   ;; let-values + ref
-   [(rack:expr:let-values (vector 'x)
-                          (rack:expr:quote (rack:val:num 0))
-                          (rack:expr:ref 'x))
-    (vector (rack:val:num 0))]
    ;; lambda + ref
    ;;; no args
    [(rack:expr:app
@@ -382,8 +374,23 @@
        (vector) 'x
        (rack:expr:ref 'x))))
     (vector (vector 2 (rack:val:num 0) (rack:val:num 1)))]
+   ;; let-values + ref
+   [(let ()
+      (define (rack:expr:let-values ids vals body)
+        (rack:expr:app
+         (rack:expr:quote (rack:val:prim:st prim:st:call-with-values))
+         (list
+          (rack:expr:lambda (vector) #f vals)
+          (rack:expr:lambda ids #f body))))
+
+      (rack:expr:let-values (vector 'x)
+                            (rack:expr:quote (rack:val:num 0))
+                            (rack:expr:ref 'x)))
+    (vector (rack:val:num 0))]
    ;; wcm
    ;; app
    ;; app prims
    ;; app clos
    ))
+
+;;; xxx add module + top-levels
