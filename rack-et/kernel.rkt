@@ -2,6 +2,8 @@
 (require racket/match
          racket/list)
 
+;; make-block : ptrs bytes -> ptr
+
 (define-syntax-rule (define-prim* i ...)
   (define prims
     (make-hasheq
