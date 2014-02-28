@@ -3,7 +3,11 @@
          racket/list
          data/gvector)
 
-;; make-block : ptrs bytes -> ptr
+;; C without operator overloading, but with GC, closures, and
+;; continuations, FFI to C
+
+;; XXX module system?
+;; XXX custodians?
 
 (define-syntax-rule (define-prim* i ...)
   (define prims
@@ -41,6 +45,10 @@
   collect-garbage
   make-ephemeron
   ephemeron-value
+  malloc ;; does not contain ptrs and is not movable/managed by gc
+  free
+  make-immobile-box ;; contains one ptr but itself is not movable/managed by gc
+  ;; xxx other kinds of malloc
   ;; modules
   dynamic-require
   ;; XXX which namespace stuff?
@@ -172,47 +180,7 @@
 (structt rack:kf:call-with-values:values rack:kf
          (receiver))
 
-(define (rack:apply fun vals s k)
-  (match fun
-    [(rack:val:clo e (rack:expr:lambda params rest-param body))
-     (define e+params
-       (for/fold ([e+ e])
-           ([p (in-vector params)]
-            [v (in-vector vals)])
-         (hash-set e+ p v)))
-     (define e+
-       (if rest-param
-         (let ()
-           (define val-cnt (vector-length vals))
-           (define param-cnt (vector-length params))
-           (define cnt (- val-cnt param-cnt))
-           (define rest-vals
-             (make-vector (add1 cnt)))
-           (vector-set! rest-vals 0 cnt)
-           (vector-copy! rest-vals 1 vals param-cnt)
-           (hash-set
-            e+params
-            rest-param
-            rest-vals))
-         e+params))
-     (rack:cstate body e+ s k)]
-    [(rack:val:prim:v prim)
-     (rack:vstate (prim vals) s k)]
-    [(rack:val:prim:st prim)
-     ;;; xxx get and provide e?
-     (prim vals s k)]))
-
-(define (rack:state:app fun rvals args e s k)
-  (match args
-    [(list)
-     (define vals (list->vector (reverse rvals)))
-     ;;; xxx provide e?
-     (rack:apply fun vals s k)]
-    [(cons arg args)
-     (rack:cstate arg e s
-                  ;;; xxx shrink e
-                  (rack:k e k mt-ms
-                          (rack:kf:app:args fun rvals args)))]))
+;; xxx remove cons on args and replace with vector + i
 
 (define (step st)
   (match st
@@ -276,6 +244,48 @@
         (error 'step "Unknown kf: ~e" kf)])]
     [_
      (error 'step "Unknown st: ~e" st)]))
+
+(define (rack:state:app fun rvals args e s k)
+  (match args
+    [(list)
+     (define vals (list->vector (reverse rvals)))
+     ;;; xxx provide e?
+     (rack:apply fun vals s k)]
+    [(cons arg args)
+     (rack:cstate arg e s
+                  ;;; xxx shrink e
+                  (rack:k e k mt-ms
+                          (rack:kf:app:args fun rvals args)))]))
+
+(define (rack:apply fun vals s k)
+  (match fun
+    [(rack:val:clo e (rack:expr:lambda params rest-param body))
+     (define e+params
+       (for/fold ([e+ e])
+           ([p (in-vector params)]
+            [v (in-vector vals)])
+         (hash-set e+ p v)))
+     (define e+
+       (if rest-param
+         (let ()
+           (define val-cnt (vector-length vals))
+           (define param-cnt (vector-length params))
+           (define cnt (- val-cnt param-cnt))
+           (define rest-vals
+             (make-vector (add1 cnt)))
+           (vector-set! rest-vals 0 cnt)
+           (vector-copy! rest-vals 1 vals param-cnt)
+           (hash-set
+            e+params
+            rest-param
+            rest-vals))
+         e+params))
+     (rack:cstate body e+ s k)]
+    [(rack:val:prim:v prim)
+     (rack:vstate (prim vals) s k)]
+    [(rack:val:prim:st prim)
+     ;;; xxx get and provide e?
+     (prim vals s k)]))
 
 (define (step* st)
   (define st-p (step st))
@@ -393,4 +403,19 @@
    ;; app clos
    ))
 
-;;; xxx add module + top-levels
+;;; xxx add module + top-level references
+
+;; module : requires x (id -> refs x expr) [refs is set of ids to
+;; call/eval before evaling expr to a value (for effects)]
+
+;; notice that we don't have phase information there, because macros
+;; are part of the compiler and are gone when we get to the run-time
+;; system.
+
+;; provides: are they just a list of ids? do we expose everything but
+;; use name obfuscation? do we integrate the interface idea?
+
+;; a file is not a module, but is a collection of modules
+
+;; module-repo : module-name -> module
+;; execute : module-repo module-name id -> value
