@@ -49,7 +49,42 @@
          [_
           (error 'compile "invalid binary operator: ~e" op)])]
       [`(if ,cond ,true, false)
-       (error 'compile "xxx if")]
+       (define C (codegen builder env cond))
+
+       (define CmpV
+         (unsafe:LLVMBuildFCmp 
+          builder 'LLVMRealONE
+          C 
+          (unsafe:LLVMConstReal (unsafe:LLVMDoubleType) 0) "ifcond"))
+
+       (define cur-fun
+         (unsafe:LLVMGetBasicBlockParent 
+          (unsafe:LLVMGetInsertBlock builder)))
+
+       (define then-bb (unsafe:LLVMAppendBasicBlock cur-fun "then"))
+       (define else-bb (unsafe:LLVMAppendBasicBlock cur-fun "else"))
+       (define merge-bb (unsafe:LLVMAppendBasicBlock cur-fun "ifcont"))
+
+       (unsafe:LLVMBuildCondBr builder CmpV then-bb else-bb)
+
+       (unsafe:LLVMPositionBuilderAtEnd builder then-bb)
+       (define T (codegen builder env true))
+       (unsafe:LLVMBuildBr builder merge-bb)
+       (define new-then-bb (unsafe:LLVMGetInsertBlock builder))
+       
+       (unsafe:LLVMPositionBuilderAtEnd builder else-bb)
+       (define F (codegen builder env false))
+       (unsafe:LLVMBuildBr builder merge-bb)
+       (define new-else-bb (unsafe:LLVMGetInsertBlock builder))
+
+       (unsafe:LLVMPositionBuilderAtEnd builder merge-bb)
+       (define PN (unsafe:LLVMBuildPhi builder (unsafe:LLVMDoubleType) "iftmp"))
+       (unsafe:LLVMAddIncoming 
+        PN 
+        (list           T           F)
+        (list new-then-bb new-else-bb))
+
+       PN]
       [(list-rest fun args)
        (define callee
          (unsafe:LLVMGetNamedFunction mod (symbol->string fun)))
@@ -191,6 +226,16 @@
       (+ x (* y 2)))
     (define (main)
       (testfunc 4 10)))
+  (define&check p:if0
+    (define (main)
+      (if 0
+        1
+        2)))
+  (define&check p:if1
+    (define (main)
+      (if 1
+        1
+        2)))
   (define&check p:fib
     (define (fib x)
       (if (< x 3)
