@@ -72,9 +72,7 @@
                            [field ctc] ...)])))))]))
 
 (define int? exact-nonnegative-integer?)
-;; TODO 1 8 16 64
 (define int-width/c (one-of/c 1 8 16 32 64))
-;; TODO 16 32 64 80 128
 (define float-width/c (one-of/c 16 32 64 80 128))
 ;; TODO 2 4 8 16
 (define vec-len/c (one-of/c 2 4 8 16))
@@ -99,7 +97,7 @@
   [expr
    [val
     [(int [w int-width/c] [v exact-nonnegative-integer?])]
-    [(float [w float-width/c][v flonum?])] ;; TODO
+    [(float [w float-width/c] [v flonum?])]
     [null] ;; TODO
     [(vector [vs (vector/len/c vec-len/c expr?)])] ;; TODO
     [(array [vs (vectorof expr?)])] ;; TODO
@@ -109,17 +107,11 @@
     ;; u = unsigned, s = signed
     sub mul udiv sdiv urem srem shl lshr ashr and ior xor add]
 
-   ;; f = floating, ff = "fast" floating,
-   [(fadd [lhs expr?] [rhs expr?])] ;; TODO
-   [(ffadd [lhs expr?] [rhs expr?])] ;; TODO
-   [(fsub [lhs expr?] [rhs expr?])] ;; TODO
-   [(ffsub [lhs expr?] [rhs expr?])] ;; TODO
-   [(fmul [lhs expr?] [rhs expr?])] ;; TODO
-   [(ffmul [lhs expr?] [rhs expr?])] ;; TODO
-   [(fdiv [lhs expr?] [rhs expr?])] ;; TODO
-   [(ffdiv [lhs expr?] [rhs expr?])] ;; TODO
-   [(frem [lhs expr?] [rhs expr?])] ;; TODO
-   [(ffrem [lhs expr?] [rhs expr?])] ;; TODO
+   [(float [lhs expr?] [rhs expr?])
+    ;; i = inexact (uses "fast" floating math)
+     add  sub  mul  div  rem 
+     ;; TODO - how do I set this from llvm-c?
+    iadd isub imul idiv irem]
 
    [(vec-ref [vec expr?] [idx expr?])] ;; TODO
    [(vec-set [vec expr?] [idx expr?] [elt expr?])] ;; TODO
@@ -145,7 +137,7 @@
    [(ftrunc [val expr?] [ty type?])] ;; TODO
    [(fext [val expr?] [ty type?])] ;; TODO
 
-   [(f->iu [val expr?] [ty type?])] ;; TODO
+   [(f->iu [val expr?] [ty type?])]
    [(f->is [val expr?] [ty type?])] ;; TODO
    [(iu->f [val expr?] [ty type?])] ;; TODO
    [(is->f [val expr?] [ty type?])] ;; TODO
@@ -169,7 +161,8 @@
    [(local-ref [id symbol?])]
    [(global-ref [id symbol?])]]
   [stmt
-   [(switch [cond expr?] [default int?] [cases (vectorof (hash/c int? stmt?))])]  ;; TODO
+   [(switch [cond expr?] [default int?]
+            [cases (vectorof (hash/c int? stmt?))])]  ;; TODO
    [(store [ptr expr?] [val expr?] [cont stmt?])] ;; TODO
    [(let [id symbol?] [val expr?] [body stmt?])]
    [(ret [val expr?])]]

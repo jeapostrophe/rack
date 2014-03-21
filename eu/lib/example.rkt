@@ -9,7 +9,9 @@
 
 (defn:fun:local:ext (type:atom:int 32) 'main (vector)
   (stmt:let
-   'A (expr:val:int 32 #x41)
+   'A (expr:f->iu (expr:float:mul (expr:val:float 32 35.0)
+                                  (expr:val:float 32 2.0))
+                  (type:atom:int 32))
    (stmt:let
     '_ (expr:call:ext (expr:global-ref 'putchar) (vector (expr:local-ref 'A)))
     (stmt:let

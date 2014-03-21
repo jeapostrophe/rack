@@ -71,6 +71,17 @@
      (check-equal? lt rt)
      (check-pred type:atom:int? lt)
      lt]
+    [(expr:float lhs rhs)
+     (define lt (type-expr genv env lhs))
+     (define rt (type-expr genv env rhs))
+     (check-equal? lt rt)
+     (check-pred type:atom:float? lt)
+     lt]
+    [(expr:f->iu v ty)
+     (define vt (type-expr genv env v))
+     (check-pred type:atom:float? vt)
+     (check-pred type:atom:int? ty)
+     ty]
     [(expr:global-ref id)
      (hash-ref genv id
                (λ () (error 'type-expr "unknown global variable: ~a" id)))]
@@ -79,14 +90,26 @@
                (λ () (error 'type-expr "unknown local variable: ~a" id)))]
     [(expr:val:int w _)
      (type:atom:int w)]
+    [(expr:val:float w _)
+     (type:atom:float w)]
     [_
      (error 'type-expr "can't check ~e" e)]))
 
 ;; xxx memoize
 (define (type->llvm-type t)
   (match t
-    [(type:atom:int 32)
-     (unsafe:LLVMInt32Type)]
+    [(type:atom:int w)
+     (unsafe:LLVMIntType w)]
+    [(type:atom:float 16)
+     (unsafe:LLVMHalfType)]
+    [(type:atom:float 32)
+     (unsafe:LLVMFloatType)]
+    [(type:atom:float 64)
+     (unsafe:LLVMDoubleType)]
+    [(type:atom:float 80)
+     (unsafe:LLVMX86FP80Type)]
+    [(type:atom:float 128)
+     (unsafe:LLVMFP128Type)]
     [(type:fun args ret)
      (unsafe:LLVMFunctionType
       (type->llvm-type ret)
@@ -210,6 +233,25 @@
        [expr:int:and? unsafe:LLVMBuildAnd]
        [expr:int:ior? unsafe:LLVMBuildOr]
        [expr:int:xor? unsafe:LLVMBuildXor])]
+    [(expr:float lhs rhs)
+     (define lv (compile-expr genv builder env lhs))
+     (define rv (compile-expr genv builder env rhs))
+     (define-syntax-rule (matcher e [pred? con] ...)
+       (match e
+         [(? pred?) (con builder lv rv "float")]
+         ...
+         [_
+          (error 'compile-expr "unknown float op: ~e" e)]))
+     (matcher e
+       [expr:float:add? unsafe:LLVMBuildFAdd]
+       [expr:float:sub? unsafe:LLVMBuildFSub]
+       [expr:float:mul? unsafe:LLVMBuildFMul]
+       [expr:float:div? unsafe:LLVMBuildFDiv]
+       [expr:float:rem? unsafe:LLVMBuildFRem])]
+    [(expr:f->iu val ty)
+     (define cv
+       (compile-expr genv builder env val))     
+     (unsafe:LLVMBuildFPToUI builder cv (type->llvm-type ty) "convert")]
     [(expr:let id val body)
      (define cv
        (compile-expr genv builder env val))
@@ -224,6 +266,8 @@
                (λ () (error 'compile-expr "unknown local variable: ~a" id)))]
     [(expr:val:int w v)
      (unsafe:LLVMConstInt (type->llvm-type (type:atom:int w)) v #t)]
+    [(expr:val:float w v)
+     (unsafe:LLVMConstReal (type->llvm-type (type:atom:float w)) v)]
     [_
      (error 'compile-expr "can't compile: ~e" e)]))
 
