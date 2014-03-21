@@ -88,107 +88,109 @@
   [expr
    [val
     [(int [v exact-nonnegative-integer?])
-     1 8 16 32 64]
-    [(float [v flonum?])     
-     16 32 64 80 128]
-    [null]
+     1 8 16 32 64] ;; TODO
+    [(float [v flonum?])
+     16 32 64 80 128] ;; TODO
+    [null] ;; TODO
     ;; xxx check size
     [(vector [vs (vectorof expr?)])
-     2 4 8 16]
-    [(array [vs (vectorof expr?)])]
-    [(struct [elts (vectorof expr?)])]
-    [zero]]
+     2 4 8 16] ;; TODO
+    [(array [vs (vectorof expr?)])] ;; TODO
+    [(struct [elts (vectorof expr?)])] ;; TODO
+    [zero]] ;; TODO
    ;; i = integer, f = floating, ff = "fast" floating, u = unsigned, s = signed
-   [(iadd [lhs expr?] [rhs expr?])]
-   [(fadd [lhs expr?] [rhs expr?])]
-   [(ffadd [lhs expr?] [rhs expr?])]
+   [(iadd [lhs expr?] [rhs expr?])] ;; TODO
+   [(fadd [lhs expr?] [rhs expr?])] ;; TODO
+   [(ffadd [lhs expr?] [rhs expr?])] ;; TODO
 
-   [(isub [lhs expr?] [rhs expr?])]
-   [(fsub [lhs expr?] [rhs expr?])]
-   [(ffsub [lhs expr?] [rhs expr?])]
+   [(isub [lhs expr?] [rhs expr?])] ;; TODO
+   [(fsub [lhs expr?] [rhs expr?])] ;; TODO
+   [(ffsub [lhs expr?] [rhs expr?])] ;; TODO
 
-   [(imul [lhs expr?] [rhs expr?])]
-   [(fmul [lhs expr?] [rhs expr?])]
-   [(ffmul [lhs expr?] [rhs expr?])]
+   [(imul [lhs expr?] [rhs expr?])] ;; TODO
+   [(fmul [lhs expr?] [rhs expr?])] ;; TODO
+   [(ffmul [lhs expr?] [rhs expr?])] ;; TODO
 
-   [(iudiv [lhs expr?] [rhs expr?])]
-   [(isdiv [lhs expr?] [rhs expr?])]
-   [(fdiv [lhs expr?] [rhs expr?])]
-   [(ffdiv [lhs expr?] [rhs expr?])]
+   [(iudiv [lhs expr?] [rhs expr?])] ;; TODO
+   [(isdiv [lhs expr?] [rhs expr?])] ;; TODO
+   [(fdiv [lhs expr?] [rhs expr?])] ;; TODO
+   [(ffdiv [lhs expr?] [rhs expr?])] ;; TODO
 
-   [(iurem [lhs expr?] [rhs expr?])]
-   [(isrem [lhs expr?] [rhs expr?])]
-   [(frem [lhs expr?] [rhs expr?])]
-   [(ffrem [lhs expr?] [rhs expr?])]
+   [(iurem [lhs expr?] [rhs expr?])] ;; TODO
+   [(isrem [lhs expr?] [rhs expr?])] ;; TODO
+   [(frem [lhs expr?] [rhs expr?])] ;; TODO
+   [(ffrem [lhs expr?] [rhs expr?])] ;; TODO
 
-   [(ishl [lhs expr?] [rhs expr?])]
-   [(ilshr [lhs expr?] [rhs expr?])]
-   [(iashr [lhs expr?] [rhs expr?])]
-   [(iand [lhs expr?] [rhs expr?])]
-   [(iior [lhs expr?] [rhs expr?])]
-   [(ixor [lhs expr?] [rhs expr?])]
+   [(ishl [lhs expr?] [rhs expr?])] ;; TODO
+   [(ilshr [lhs expr?] [rhs expr?])] ;; TODO
+   [(iashr [lhs expr?] [rhs expr?])] ;; TODO
+   [(iand [lhs expr?] [rhs expr?])] ;; TODO
+   [(iior [lhs expr?] [rhs expr?])] ;; TODO
+   [(ixor [lhs expr?] [rhs expr?])] ;; TODO
 
-   [(vec-ref [vec expr?] [idx expr?])]
-   [(vec-set [vec expr?] [idx expr?] [elt expr?])]
+   [(vec-ref [vec expr?] [idx expr?])] ;; TODO
+   [(vec-set [vec expr?] [idx expr?] [elt expr?])] ;; TODO
    [(vec-shuffle [lhs expr?] [rhs expr?]
-                 [mask (vectorof int?)])]
+                 [mask (vectorof int?)])] ;; TODO
 
    [(agg-ref [agg expr?]
-             [path (vectorof int?)])]
+             [path (vectorof int?)])] ;; TODO
    [(agg-set [agg expr?]
              [path (vectorof int?)]
-             [elt expr?])]
+             [elt expr?])] ;; TODO
 
-   [(alloca [ty type?] [num expr?])]
-   [(load [ptr expr?])]
+   [(alloca [ty type?] [num expr?])] ;; TODO
+   [(load [ptr expr?])] ;; TODO
 
-   [(ptr-addr [ptr expr?] [path (vectorof expr?)])]
-   [(ptr-vec-addrs [ptr-vec expr?] [idx expr?])]
+   [(ptr-addr [ptr expr?] [path (vectorof expr?)])] ;; TODO
+   [(ptr-vec-addrs [ptr-vec expr?] [idx expr?])] ;; TODO
 
-   [(itrunc [val expr?] [ty type?])]
-   [(izext [val expr?] [ty type?])]
-   [(isext [val expr?] [ty type?])]
+   [(itrunc [val expr?] [ty type?])] ;; TODO
+   [(izext [val expr?] [ty type?])] ;; TODO
+   [(isext [val expr?] [ty type?])] ;; TODO
 
-   [(ftrunc [val expr?] [ty type?])]
-   [(fext [val expr?] [ty type?])]
+   [(ftrunc [val expr?] [ty type?])] ;; TODO
+   [(fext [val expr?] [ty type?])] ;; TODO
 
-   [(f->iu [val expr?] [ty type?])]
-   [(f->is [val expr?] [ty type?])]
-   [(iu->f [val expr?] [ty type?])]
-   [(is->f [val expr?] [ty type?])]
+   [(f->iu [val expr?] [ty type?])] ;; TODO
+   [(f->is [val expr?] [ty type?])] ;; TODO
+   [(iu->f [val expr?] [ty type?])] ;; TODO
+   [(is->f [val expr?] [ty type?])] ;; TODO
    ;; xxx should i include these?
-   [(ptr->i [val expr?] [ty type?])]
-   [(i->ptr [val expr?] [ty type?])]
+   [(ptr->i [val expr?] [ty type?])] ;; TODO
+   [(i->ptr [val expr?] [ty type?])] ;; TODO
 
    [(icmp [lhs expr?] [rhs expr?])
-    eq ne ugt uge ult ule sgt sge slt sle]
+    eq ne ugt uge ult ule sgt sge slt sle]  ;; TODO
    [(fcmp [lhs expr?] [rhs expr?])
-    false oeq ogt oge olt ole one ord ueq ugt uge ult ule une uno true]
+    false oeq ogt oge olt ole one ord ueq ugt uge ult ule une uno true]  ;; TODO
 
-   [(select [cond expr?] [true expr?] [false expr?])]
+   [(select [cond expr?] [true expr?] [false expr?])]  ;; TODO
    ;; xxx support tail (can't see alloca), readonly, readnone [always
    ;; generate nounwind]
    [(call [fun expr?] [args (vectorof expr?)])
-    ext int]
+    ext 
+    int]  ;; TODO
 
-   [(let [id symbol?] [val expr?] [body expr?])]
-   [(local-ref [id symbol?])]
+   [(let [id symbol?] [val expr?] [body expr?])]  ;; TODO
+   [(local-ref [id symbol?])]  ;; TODO
    [(global-ref [id symbol?])]]
   [stmt
-   [(switch [cond expr?] [default int?] [cases (vectorof (hash/c int? stmt?))])]
-   [(store [ptr expr?] [val expr?] [cont stmt?])]
+   [(switch [cond expr?] [default int?] [cases (vectorof (hash/c int? stmt?))])]  ;; TODO
+   [(store [ptr expr?] [val expr?] [cont stmt?])] ;; TODO
    [(let [id symbol?] [val expr?] [body stmt?])]
    [(ret [val expr?])]]
   [defn
     ;; xxx constant
     [(var [ty type?] [id symbol?])
-     [(int [val constant?])]
-     [ext]]
+     [(int [val constant?])]  ;; TODO
+     [ext]]  ;; TODO
     [(fun [ret type?] [id symbol?] [args (vectorof (vector/c symbol? type?))])
      ;; generate nounwind
      ;; xxx [readnone, readonly]
-     [(int [body stmt?])]
-     [ext]]]
+     [(int [body stmt?])] ;; TODO
+     [(ext [body stmt?])]
+     [extern]]]
   [(prog [defns (listof defn?)])])
 
 (define (constant? e)

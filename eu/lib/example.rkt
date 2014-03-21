@@ -1,8 +1,8 @@
 #lang rack/eu
 
-(defn:fun:ext (type:atom:int:32) 'putchar (vector (vector 'c (type:atom:int:32))))
+(defn:fun:extern (type:atom:int:32) 'putchar (vector (vector 'c (type:atom:int:32))))
 
-(defn:fun:int (type:atom:int:32) 'main (vector)
+(defn:fun:ext (type:atom:int:32) 'main (vector)
   (stmt:let
    '_
    (expr:call:ext (expr:global-ref 'putchar)
