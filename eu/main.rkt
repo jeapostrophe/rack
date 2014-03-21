@@ -131,6 +131,7 @@
   (define fpm
     (unsafe:LLVMCreateFunctionPassManagerForModule mod))
 
+  ;; xxx add more?
   (unsafe:LLVMAddTargetData layout fpm)
   (unsafe:LLVMAddBasicAliasAnalysisPass fpm)
   (unsafe:LLVMAddInstructionCombiningPass fpm)
@@ -280,10 +281,6 @@
         (define L (codegen builder env lhs))
         (define R (codegen builder env rhs))
         (match op
-          ['-
-           (unsafe:LLVMBuildFSub builder L R "subtmp")]
-          ['*
-           (unsafe:LLVMBuildFMul builder L R "multmp")]
           ['<
            (unsafe:LLVMBuildUIToFP
             builder
