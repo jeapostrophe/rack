@@ -29,9 +29,9 @@
 
 (define (type-defn genv d)
   (match d
-    [(defn:fun:ext ret id args)
+    [(defn:fun:extern ret id args)
      (values id (defn:fun-type d))]
-    [(defn:fun:int ret id args body)
+    [(defn:fun:local ret id args body)
      (when genv
        (define env
          (for/hasheq
@@ -62,18 +62,30 @@
            [et (in-vector eargs-t)])
        (check-equal? (type-expr genv env a) et))
      rt]
+    [(expr:let id val body)
+     (define ty (type-expr genv env val))
+     (type-expr genv (hash-set env id ty) body)]
+    [(expr:iadd lhs rhs)
+     (define lt (type-expr genv env lhs))
+     (define rt (type-expr genv env rhs))
+     (check-equal? lt rt)
+     (check-pred type:atom:int? lt)
+     lt]
     [(expr:global-ref id)
      (hash-ref genv id
                (λ () (error 'type-expr "unknown global variable: ~a" id)))]
-    [(expr:val:int:32 _)
-     (type:atom:int:32)]
+    [(expr:local-ref id)
+     (hash-ref env id
+               (λ () (error 'type-expr "unknown local variable: ~a" id)))]
+    [(expr:val:int w _)
+     (type:atom:int w)]
     [_
      (error 'type-expr "can't check ~e" e)]))
 
 ;; xxx memoize
 (define (type->llvm-type t)
   (match t
-    [(type:atom:int:32)
+    [(type:atom:int 32)
      (unsafe:LLVMInt32Type)]
     [(type:fun args ret)
      (unsafe:LLVMFunctionType
@@ -130,9 +142,9 @@
 
 (define (compile-defn genv mod fpm d)
   (match d
-    [(defn:fun:ext ret fun args)
+    [(defn:fun:extern ret fun args)
      (void)]
-    [(defn:fun:int ret fun args body)
+    [(defn:fun:local:ext ret fun args body)
      (define the-fun
        (hash-ref genv fun))
 
@@ -175,11 +187,24 @@
       (for/list ([a (in-vector args)])
         (compile-expr genv builder env a))
       "call")]
+    [(expr:iadd lhs rhs)
+     (define lv (compile-expr genv builder env lhs))
+     (define rv (compile-expr genv builder env rhs))
+     (unsafe:LLVMBuildAdd builder lv rv "add")]
+    [(expr:let id val body)
+     (define cv
+       (compile-expr genv builder env val))
+     (define env-p
+       (hash-set env id cv))
+     (compile-expr genv builder env-p body)]
     [(expr:global-ref id)
      (hash-ref genv id
-               (λ () (error 'type-expr "unknown global variable: ~a" id)))]
-    [(expr:val:int:32 v)
-     (unsafe:LLVMConstInt (type->llvm-type (type:atom:int:32)) v #t)]
+               (λ () (error 'compile-expr "unknown global variable: ~a" id)))]
+    [(expr:local-ref id)
+     (hash-ref env id
+               (λ () (error 'compile-expr "unknown local variable: ~a" id)))]
+    [(expr:val:int w v)
+     (unsafe:LLVMConstInt (type->llvm-type (type:atom:int w)) v #t)]
     [_
      (error 'compile-expr "can't compile: ~e" e)]))
 

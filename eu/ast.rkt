@@ -72,34 +72,41 @@
                            [field ctc] ...)])))))]))
 
 (define int? exact-nonnegative-integer?)
+;; TODO 1 8 16 64
+(define int-width/c (one-of/c 1 8 16 32 64))
+;; TODO 16 32 64 80 128
+(define float-width/c (one-of/c 16 32 64 80 128))
+;; TODO 2 4 8 16
+(define vec-len/c (one-of/c 2 4 8 16))
+(define (vector/len/c len/c elt/c)
+  (λ (x)
+    (and (vector? x)
+         (len/c (vector-length x))
+         (for/and ([e (in-vector x)])
+           (elt/c e)))))
 
 (define-types
   [type
    void
    [atom
-    [  int 1 8 16 32 64]
-    [float     16 32 64 80 128]
+    [(int [w int-width/c])]
+    [(float [w float-width/c])]
     [(ptr [ref type?])]]
-   [(vector [elem type:atom?])
-    2 4 8 16]
+   [(vector [len vec-len/c] [elem type:atom?])]
    [(array [elem type?] (num int?))]
    [(struct [elems (vectorof type?)] [packed? boolean?])]
    [(fun [args (vectorof type?)] [ret type?])]]
   [expr
    [val
-    [(int [v exact-nonnegative-integer?])
-     1 8 16 32 64] ;; TODO
-    [(float [v flonum?])
-     16 32 64 80 128] ;; TODO
+    [(int [w int-width/c] [v exact-nonnegative-integer?])]
+    [(float [w float-width/c][v flonum?])] ;; TODO
     [null] ;; TODO
-    ;; xxx check size
-    [(vector [vs (vectorof expr?)])
-     2 4 8 16] ;; TODO
+    [(vector [vs (vector/len/c vec-len/c expr?)])] ;; TODO
     [(array [vs (vectorof expr?)])] ;; TODO
     [(struct [elts (vectorof expr?)])] ;; TODO
     [zero]] ;; TODO
    ;; i = integer, f = floating, ff = "fast" floating, u = unsigned, s = signed
-   [(iadd [lhs expr?] [rhs expr?])] ;; TODO
+   [(iadd [lhs expr?] [rhs expr?])]
    [(fadd [lhs expr?] [rhs expr?])] ;; TODO
    [(ffadd [lhs expr?] [rhs expr?])] ;; TODO
 
@@ -169,11 +176,11 @@
    ;; xxx support tail (can't see alloca), readonly, readnone [always
    ;; generate nounwind]
    [(call [fun expr?] [args (vectorof expr?)])
-    ext 
+    ext
     int]  ;; TODO
 
-   [(let [id symbol?] [val expr?] [body expr?])]  ;; TODO
-   [(local-ref [id symbol?])]  ;; TODO
+   [(let [id symbol?] [val expr?] [body expr?])]
+   [(local-ref [id symbol?])]
    [(global-ref [id symbol?])]]
   [stmt
    [(switch [cond expr?] [default int?] [cases (vectorof (hash/c int? stmt?))])]  ;; TODO
@@ -184,15 +191,15 @@
     ;; xxx constant
     [(var [ty type?] [id symbol?])
      [(int [val constant?])]  ;; TODO
-     [ext]]  ;; TODO
+     [extern]]  ;; TODO
     [(fun [ret type?] [id symbol?] [args (vectorof (vector/c symbol? type?))])
      ;; generate nounwind
      ;; xxx [readnone, readonly]
-     [(int [body stmt?])] ;; TODO
-     [(ext [body stmt?])]
+     [(local [body stmt?])
+      int ;; TODO
+      ext]
      [extern]]]
   [(prog [defns (listof defn?)])])
 
 (define (constant? e)
   (error 'constant?))
-
