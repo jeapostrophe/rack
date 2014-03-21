@@ -19,3 +19,8 @@ echo Compiling and running
 llc -O3 -filetype=obj ${FILE}.bc -o ${FILE}.o && \
 clang ${FILE}.o -o ${FILE}.exe && \
 ./${FILE}.exe
+
+echo Connecting to C
+strip -N main ${FILE}.o -o ${FILE}.d.o
+clang ${FILE}.d.o lib/cinterop.c -o lib/cinterop.exe && \
+./lib/cinterop.exe

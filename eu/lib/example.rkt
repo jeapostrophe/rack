@@ -2,6 +2,11 @@
 
 (defn:fun:extern (type:atom:int 32) 'putchar (vector (vector 'c (type:atom:int 32))))
 
+(defn:fun:local:ext (type:atom:int 32) 'f (vector)
+  (stmt:ret
+      (expr:call:ext (expr:global-ref 'putchar)
+                     (vector (expr:val:int 32 #x41)))))
+
 (defn:fun:local:ext (type:atom:int 32) 'main (vector)
   (stmt:let
    'A (expr:val:int 32 #x41)
@@ -11,7 +16,7 @@
      '_ (expr:call:ext 
          (expr:global-ref 'putchar) 
          (vector 
-          (expr:let 'B (expr:iadd (expr:local-ref 'A) (expr:val:int 32 1))
+          (expr:let 'B (expr:int:add (expr:local-ref 'A) (expr:val:int 32 1))
                     (expr:local-ref 'B))))
      (stmt:ret
       (expr:call:ext (expr:global-ref 'putchar)

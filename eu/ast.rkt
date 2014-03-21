@@ -105,35 +105,21 @@
     [(array [vs (vectorof expr?)])] ;; TODO
     [(struct [elts (vectorof expr?)])] ;; TODO
     [zero]] ;; TODO
-   ;; i = integer, f = floating, ff = "fast" floating, u = unsigned, s = signed
-   [(iadd [lhs expr?] [rhs expr?])]
+   [(int [lhs expr?] [rhs expr?])
+    ;; u = unsigned, s = signed
+    sub mul udiv sdiv urem srem shl lshr ashr and ior xor add]
+
+   ;; f = floating, ff = "fast" floating,
    [(fadd [lhs expr?] [rhs expr?])] ;; TODO
    [(ffadd [lhs expr?] [rhs expr?])] ;; TODO
-
-   [(isub [lhs expr?] [rhs expr?])] ;; TODO
    [(fsub [lhs expr?] [rhs expr?])] ;; TODO
    [(ffsub [lhs expr?] [rhs expr?])] ;; TODO
-
-   [(imul [lhs expr?] [rhs expr?])] ;; TODO
    [(fmul [lhs expr?] [rhs expr?])] ;; TODO
    [(ffmul [lhs expr?] [rhs expr?])] ;; TODO
-
-   [(iudiv [lhs expr?] [rhs expr?])] ;; TODO
-   [(isdiv [lhs expr?] [rhs expr?])] ;; TODO
    [(fdiv [lhs expr?] [rhs expr?])] ;; TODO
    [(ffdiv [lhs expr?] [rhs expr?])] ;; TODO
-
-   [(iurem [lhs expr?] [rhs expr?])] ;; TODO
-   [(isrem [lhs expr?] [rhs expr?])] ;; TODO
    [(frem [lhs expr?] [rhs expr?])] ;; TODO
    [(ffrem [lhs expr?] [rhs expr?])] ;; TODO
-
-   [(ishl [lhs expr?] [rhs expr?])] ;; TODO
-   [(ilshr [lhs expr?] [rhs expr?])] ;; TODO
-   [(iashr [lhs expr?] [rhs expr?])] ;; TODO
-   [(iand [lhs expr?] [rhs expr?])] ;; TODO
-   [(iior [lhs expr?] [rhs expr?])] ;; TODO
-   [(ixor [lhs expr?] [rhs expr?])] ;; TODO
 
    [(vec-ref [vec expr?] [idx expr?])] ;; TODO
    [(vec-set [vec expr?] [idx expr?] [elt expr?])] ;; TODO

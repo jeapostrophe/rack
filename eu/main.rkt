@@ -65,7 +65,7 @@
     [(expr:let id val body)
      (define ty (type-expr genv env val))
      (type-expr genv (hash-set env id ty) body)]
-    [(expr:iadd lhs rhs)
+    [(expr:int lhs rhs)
      (define lt (type-expr genv env lhs))
      (define rt (type-expr genv env rhs))
      (check-equal? lt rt)
@@ -187,10 +187,29 @@
       (for/list ([a (in-vector args)])
         (compile-expr genv builder env a))
       "call")]
-    [(expr:iadd lhs rhs)
+    [(expr:int lhs rhs)
      (define lv (compile-expr genv builder env lhs))
      (define rv (compile-expr genv builder env rhs))
-     (unsafe:LLVMBuildAdd builder lv rv "add")]
+     (define-syntax-rule (matcher e [pred? con] ...)
+       (match e
+         [(? pred?) (con builder lv rv "int")]
+         ...
+         [_
+          (error 'compile-expr "unknown integer op: ~e" e)]))
+     (matcher e
+       [expr:int:add? unsafe:LLVMBuildAdd]       
+       [expr:int:sub? unsafe:LLVMBuildSub]
+       [expr:int:mul? unsafe:LLVMBuildMul]
+       [expr:int:udiv? unsafe:LLVMBuildUDiv]
+       [expr:int:sdiv? unsafe:LLVMBuildSDiv]
+       [expr:int:urem? unsafe:LLVMBuildURem]
+       [expr:int:srem? unsafe:LLVMBuildSRem]
+       [expr:int:shl? unsafe:LLVMBuildShl]
+       [expr:int:lshr? unsafe:LLVMBuildLShr]
+       [expr:int:ashr? unsafe:LLVMBuildAShr]
+       [expr:int:and? unsafe:LLVMBuildAnd]
+       [expr:int:ior? unsafe:LLVMBuildOr]
+       [expr:int:xor? unsafe:LLVMBuildXor])]
     [(expr:let id val body)
      (define cv
        (compile-expr genv builder env val))
@@ -217,8 +236,6 @@
         (define L (codegen builder env lhs))
         (define R (codegen builder env rhs))
         (match op
-          ['+
-           (unsafe:LLVMBuildFAdd builder L R "addtmp")]
           ['-
            (unsafe:LLVMBuildFSub builder L R "subtmp")]
           ['*
