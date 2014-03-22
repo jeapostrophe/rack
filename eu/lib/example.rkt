@@ -9,17 +9,29 @@
 
 (defn:fun:local:ext (type:atom:int 32) 'main (vector)
   (stmt:let
-   'A (expr:f->iu
+   'A (expr:convert:f2i:u
        (expr:float:mul
-        (expr:is->f
+        (expr:convert:i2f:s
          (expr:int:mul
-          (expr:f->is
-           (expr:val:float 32 -35.0)
+          (expr:convert:f2i:s
+           (expr:convert:f2f:trunc
+            (expr:convert:f2f:ext
+             (expr:val:float 32 -35.0)
+             (type:atom:float 64))
+            (type:atom:float 32))
            (type:atom:int 32))
-          (expr:val:int 32 -1))
+          (expr:convert:i2i:trunc
+           (expr:convert:i2i:sext
+            (expr:val:int 32 -1)
+            (type:atom:int 64))
+           (type:atom:int 32)))
          (type:atom:float 32))
-        (expr:iu->f
-         (expr:val:int 32 2)
+        (expr:convert:i2f:u
+         (expr:convert:i2i:trunc
+          (expr:convert:i2i:zext
+           (expr:val:int 32 2)
+           (type:atom:int 64))
+          (type:atom:int 32))
          (type:atom:float 32)))
        (type:atom:int 32))
    (stmt:let

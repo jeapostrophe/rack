@@ -131,20 +131,17 @@
    [(ptr-addr [ptr expr?] [path (vectorof expr?)])] ;; TODO
    [(ptr-vec-addrs [ptr-vec expr?] [idx expr?])] ;; TODO
 
-   [(itrunc [val expr?] [ty type?])] ;; TODO
-   [(izext [val expr?] [ty type?])] ;; TODO
-   [(isext [val expr?] [ty type?])] ;; TODO
+   [(convert [val expr?] [ty type?])
+    [i2i
+     trunc zext sext]
+    [f2f
+     trunc ext]
+    [f2i
+     u s]
+    [i2f
+     u s]]
 
-   [(ftrunc [val expr?] [ty type?])] ;; TODO
-   [(fext [val expr?] [ty type?])] ;; TODO
-
-   [(f->iu [val expr?] [ty type?])]
-   [(f->is [val expr?] [ty type?])]
-   [(iu->f [val expr?] [ty type?])]
-   [(is->f [val expr?] [ty type?])]
-   ;; xxx should i include these?
-   [(ptr->i [val expr?] [ty type?])] ;; TODO
-   [(i->ptr [val expr?] [ty type?])] ;; TODO
+   ;; xxx should i include ptr->i and i->ptr?
 
    [(icmp [lhs expr?] [rhs expr?])
     eq ne ugt uge ult ule sgt sge slt sle]  ;; TODO

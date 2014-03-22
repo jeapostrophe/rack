@@ -77,18 +77,38 @@
      (check-equal? lt rt)
      (check-pred type:atom:float? lt)
      lt]
-    [(or (expr:f->iu v ty)
-         (expr:f->is v ty))
-     (define vt (type-expr genv env v))
-     (check-pred type:atom:float? vt)
-     (check-pred type:atom:int? ty)
-     ty]
-    [(or (expr:iu->f v ty)
-         (expr:is->f v ty))
-     (define vt (type-expr genv env v))
-     (check-pred type:atom:int? vt)
-     (check-pred type:atom:float? ty)
-     ty]
+    [(expr:convert from-e to-ty)
+     (define from-ty (type-expr genv env from-e))
+     (match e
+       [(? expr:convert:i2i?)
+        (check-pred type:atom:int? from-ty)
+        (check-pred type:atom:int? to-ty)]
+       [(? expr:convert:f2f?)
+        (check-pred type:atom:float? from-ty)
+        (check-pred type:atom:float? to-ty)]
+       [(? expr:convert:f2i?)
+        (check-pred type:atom:float? from-ty)
+        (check-pred type:atom:int? to-ty)]
+       [(? expr:convert:i2f?)
+        (check-pred type:atom:int? from-ty)
+        (check-pred type:atom:float? to-ty)])
+     (match e
+       [(? expr:convert:i2i:trunc?)
+        (check-true (< (type:atom:int-w to-ty)
+                       (type:atom:int-w from-ty)))]
+       [(or (? expr:convert:i2i:zext?)
+            (? expr:convert:i2i:sext?))
+        (check-true (< (type:atom:int-w from-ty)
+                       (type:atom:int-w to-ty)))]
+       [(? expr:convert:f2f:trunc?)
+        (check-true (< (type:atom:float-w to-ty)
+                       (type:atom:float-w from-ty)))]
+       [(? expr:convert:f2f:ext?)
+        (check-true (< (type:atom:float-w from-ty)
+                       (type:atom:float-w to-ty)))]
+       [_
+        (void)])
+     to-ty]
     [(expr:global-ref id)
      (hash-ref genv id
                (λ () (error 'type-expr "unknown global variable: ~a" id)))]
@@ -256,22 +276,25 @@
        [expr:float:mul? unsafe:LLVMBuildFMul]
        [expr:float:div? unsafe:LLVMBuildFDiv]
        [expr:float:rem? unsafe:LLVMBuildFRem])]
-    [(expr:iu->f val ty)
-     (define cv
-       (compile-expr genv builder env val))     
-     (unsafe:LLVMBuildUIToFP builder cv (type->llvm-type ty) "convert")]
-    [(expr:is->f val ty)
-     (define cv
-       (compile-expr genv builder env val))     
-     (unsafe:LLVMBuildSIToFP builder cv (type->llvm-type ty) "convert")]
-    [(expr:f->iu val ty)
-     (define cv
-       (compile-expr genv builder env val))     
-     (unsafe:LLVMBuildFPToUI builder cv (type->llvm-type ty) "convert")]
-    [(expr:f->is val ty)
-     (define cv
-       (compile-expr genv builder env val))     
-     (unsafe:LLVMBuildFPToSI builder cv (type->llvm-type ty) "convert")]
+    [(expr:convert val ty)
+     (define cv (compile-expr genv builder env val))
+     (define lty (type->llvm-type ty))
+     (define-syntax-rule (matcher e [pred? con] ...)
+       (match e
+         [(? pred?) (con builder cv lty "convert")]
+         ...
+         [_
+          (error 'compile-expr "unknown conversion op: ~e" e)]))
+     (matcher e
+       [expr:convert:f2f:ext? unsafe:LLVMBuildFPExt]
+       [expr:convert:f2f:trunc? unsafe:LLVMBuildFPTrunc]
+       [expr:convert:f2i:s? unsafe:LLVMBuildFPToSI]
+       [expr:convert:f2i:u? unsafe:LLVMBuildFPToUI]
+       [expr:convert:i2f:s? unsafe:LLVMBuildSIToFP]
+       [expr:convert:i2f:u? unsafe:LLVMBuildUIToFP]
+       [expr:convert:i2i:trunc? unsafe:LLVMBuildTrunc]
+       [expr:convert:i2i:sext? unsafe:LLVMBuildSExt]
+       [expr:convert:i2i:zext? unsafe:LLVMBuildZExt])]
     [(expr:let id val body)
      (define cv
        (compile-expr genv builder env val))
