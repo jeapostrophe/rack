@@ -77,10 +77,17 @@
      (check-equal? lt rt)
      (check-pred type:atom:float? lt)
      lt]
-    [(expr:f->iu v ty)
+    [(or (expr:f->iu v ty)
+         (expr:f->is v ty))
      (define vt (type-expr genv env v))
      (check-pred type:atom:float? vt)
      (check-pred type:atom:int? ty)
+     ty]
+    [(or (expr:iu->f v ty)
+         (expr:is->f v ty))
+     (define vt (type-expr genv env v))
+     (check-pred type:atom:int? vt)
+     (check-pred type:atom:float? ty)
      ty]
     [(expr:global-ref id)
      (hash-ref genv id
@@ -249,10 +256,22 @@
        [expr:float:mul? unsafe:LLVMBuildFMul]
        [expr:float:div? unsafe:LLVMBuildFDiv]
        [expr:float:rem? unsafe:LLVMBuildFRem])]
+    [(expr:iu->f val ty)
+     (define cv
+       (compile-expr genv builder env val))     
+     (unsafe:LLVMBuildUIToFP builder cv (type->llvm-type ty) "convert")]
+    [(expr:is->f val ty)
+     (define cv
+       (compile-expr genv builder env val))     
+     (unsafe:LLVMBuildSIToFP builder cv (type->llvm-type ty) "convert")]
     [(expr:f->iu val ty)
      (define cv
        (compile-expr genv builder env val))     
      (unsafe:LLVMBuildFPToUI builder cv (type->llvm-type ty) "convert")]
+    [(expr:f->is val ty)
+     (define cv
+       (compile-expr genv builder env val))     
+     (unsafe:LLVMBuildFPToSI builder cv (type->llvm-type ty) "convert")]
     [(expr:let id val body)
      (define cv
        (compile-expr genv builder env val))

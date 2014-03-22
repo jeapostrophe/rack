@@ -92,11 +92,11 @@
     [(ptr [ref type?])]]
    [(vector [len vec-len/c] [elem type:atom?])]
    [(array [elem type?] (num int?))]
-   [(struct [elems (vectorof type?)] [packed? boolean?])]
+   [(struct [elems (vectorof type?)])]
    [(fun [args (vectorof type?)] [ret type?])]]
   [expr
    [val
-    [(int [w int-width/c] [v exact-nonnegative-integer?])]
+    [(int [w int-width/c] [v exact-integer?])]
     [(float [w float-width/c] [v flonum?])]
     [null] ;; TODO
     [(vector [vs (vector/len/c vec-len/c expr?)])] ;; TODO
@@ -127,6 +127,7 @@
    [(alloca [ty type?] [num expr?])] ;; TODO
    [(load [ptr expr?])] ;; TODO
 
+   ;; GEP
    [(ptr-addr [ptr expr?] [path (vectorof expr?)])] ;; TODO
    [(ptr-vec-addrs [ptr-vec expr?] [idx expr?])] ;; TODO
 
@@ -138,9 +139,9 @@
    [(fext [val expr?] [ty type?])] ;; TODO
 
    [(f->iu [val expr?] [ty type?])]
-   [(f->is [val expr?] [ty type?])] ;; TODO
-   [(iu->f [val expr?] [ty type?])] ;; TODO
-   [(is->f [val expr?] [ty type?])] ;; TODO
+   [(f->is [val expr?] [ty type?])]
+   [(iu->f [val expr?] [ty type?])]
+   [(is->f [val expr?] [ty type?])]
    ;; xxx should i include these?
    [(ptr->i [val expr?] [ty type?])] ;; TODO
    [(i->ptr [val expr?] [ty type?])] ;; TODO

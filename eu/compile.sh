@@ -8,6 +8,7 @@ racket -e "(require (submod (file \"${FILE}\") dump))" -- || exit 0
 
 echo Compiling
 racket -e "(require (submod (file \"${FILE}\") compile))" -- ${FILE}.bc || exit 0
+llvm-nm ${FILE}.bc
 
 echo Interpreting with racket
 racket -e "(require (submod (file \"${FILE}\") main))" -- || exit 0
@@ -17,6 +18,7 @@ lli -O3 ${FILE}.bc
 
 echo Compiling and running
 llc -O3 -filetype=obj ${FILE}.bc -o ${FILE}.o && \
+nm ${FILE}.o && \
 clang ${FILE}.o -o ${FILE}.exe && \
 ./${FILE}.exe
 
