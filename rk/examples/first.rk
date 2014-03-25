@@ -1,0 +1,97 @@
+#lang rk
+
+Rack starts in writing mode to facilitate documentation, comments, and
+literate programming. However, most text consumers expect text to be
+passed to special forms.
+
+XXX Until you require, where do these forms come from? Are they just
+modules?
+
+@doc{ 
+ For instance, the 'doc' form is for general purpose documentation. }
+
+@doc[#:name "subdoc"]{ 
+ A single file might contain many separate pieces of documentation,
+ which have their own names. This is for, for instance, writing a
+ tutorial and reference manual entry about the same time. }
+
+You can consider comments to be anything outside of a text block that
+a consumer will not see.
+
+You write code inside @"@"code[...]. (The code can't be inside {}s
+because that means text in writing mode.)
+
+@code[
+ import list1.0 from rk/list;
+ @;{But there is a comment form so that you can include comments in
+  code blocks.}
+ import opengl3.0 from opengl
+        except GLerror; ]
+
+This is the same as 
+@(code
+  import list1.0 from rk/list; )
+but that doesn't look as distinct, so you normally use the brackets.
+
+A code fragment can be given a name so it can be mentioned in
+documentation/etc.
+
+@code[#:name <f-defn>
+ def f(x) {
+  - x * 7 + 5 * 8; };
+
+ def f'(y-x) {
+  y-x * 7 + 5 * 8; }; ]
+
+@doc{
+ An important thing to know about Rack and algebraic expressions is
+ that the operators must be separated with spaces because there's no
+ restriction on the names of identifiers. Here's a good example:
+
+ @codequote[<f-defn>] }
+
+@code[
+ check f 10 = -30;
+ check f 10 = 110; ]
+
+If you didn't give a code block a name, then it will be added to the
+unnamed block which can be quoted in its entirety.
+
+@doc{
+ @codequote[] }
+
+Something interesting about Rack is that all identifiers made up
+exclusively with characters from the Unicode category Sm are operators
+automatically. A few of them have interesting precedence (taken from
+C), but most have precedence like multiplications.
+
+@code[
+ def ⊏⊏⊏ (x, y) { true; }
+ check 3 ⊏⊏⊏ 7 = true; ]
+
+If you want to use something else like it is an operator, you can put it
+inside of backticks.
+
+@code[
+ def g (x, y) { x + y; }
+ check 10 `g` 11 = 21; ]
+
+In Rack, parentheses are always "meaningless" and used exclusively for
+grouping. The @"@" sign always means a text component, except in a
+literal string. This makes it the preferred way to do output and
+formatting. For instance, here is the minimal "Hello, World!":
+
+@code[ @{Hello World!} ]
+
+And here's a nice printer:
+
+@code[
+ for i in 1 to 100 {
+  @println{There are @i bottles of soda on the wall.} } ]
+
+It's actually equivalent to this:
+
+@code[
+ for i in 1 to 100 {
+  println @{There are @i bottles of soda on the wall.} } ]
+

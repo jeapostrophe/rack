@@ -74,6 +74,7 @@
 (define int? exact-nonnegative-integer?)
 (define int-width/c (one-of/c 1 8 16 32 64))
 (define float-width/c (one-of/c 16 32 64 80 128))
+;; TODO almost every type check has to account for vectors
 ;; TODO 2 4 8 16
 (define vec-len/c (one-of/c 2 4 8 16))
 (define (vector/len/c len/c elt/c)
@@ -103,15 +104,15 @@
     [(array [vs (vectorof expr?)])] ;; TODO
     [(struct [elts (vectorof expr?)])] ;; TODO
     [zero]] ;; TODO
+
+   ;; XXX add the stdc intrinsics?
    [(int [lhs expr?] [rhs expr?])
     ;; u = unsigned, s = signed
-    sub mul udiv sdiv urem srem shl lshr ashr and ior xor add]
+    sub mul udiv sdiv urem srem
+    shl lshr ashr and ior xor add]
 
    [(float [lhs expr?] [rhs expr?])
-    ;; i = inexact (uses "fast" floating math)
-     add  sub  mul  div  rem 
-     ;; TODO - how do I set this from llvm-c?
-    iadd isub imul idiv irem]
+    add  sub  mul  div  rem]
 
    [(vec-ref [vec expr?] [idx expr?])] ;; TODO
    [(vec-set [vec expr?] [idx expr?] [elt expr?])] ;; TODO
@@ -141,8 +142,6 @@
     [i2f
      u s]]
 
-   ;; xxx should i include ptr->i and i->ptr?
-
    [(icmp [lhs expr?] [rhs expr?])
     eq ne ugt uge ult ule sgt sge slt sle]  ;; TODO
    [(fcmp [lhs expr?] [rhs expr?])
@@ -159,6 +158,7 @@
    [(local-ref [id symbol?])]
    [(global-ref [id symbol?])]]
   [stmt
+   ;; xxx default should not be int, but should be stmt
    [(switch [cond expr?] [default int?]
             [cases (vectorof (hash/c int? stmt?))])]  ;; TODO
    [(store [ptr expr?] [val expr?] [cont stmt?])] ;; TODO
