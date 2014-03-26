@@ -105,7 +105,6 @@
     [(struct [elts (vectorof expr?)])] ;; TODO
     [zero]] ;; TODO
 
-   ;; XXX add the stdc intrinsics?
    [(int [lhs expr?] [rhs expr?])
     ;; u = unsigned, s = signed
     sub mul udiv sdiv urem srem
@@ -158,9 +157,9 @@
    [(local-ref [id symbol?])]
    [(global-ref [id symbol?])]]
   [stmt
-   ;; xxx default should not be int, but should be stmt
-   [(switch [cond expr?] [default int?]
-            [cases (vectorof (hash/c int? stmt?))])]  ;; TODO
+   [(switch [cond expr?] 
+            [cases (hash/c int? stmt?)]
+            [default stmt?])]  ;; TODO
    [(store [ptr expr?] [val expr?] [cont stmt?])] ;; TODO
    [(let [id symbol?] [val expr?] [body stmt?])]
    [(ret [val expr?])]]

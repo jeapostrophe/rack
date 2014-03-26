@@ -38,10 +38,10 @@ documentation/etc.
 
 @code[#:name <f-defn>
  def f(x) {
-  - x * 7 + 5 * 8; };
+  - x * 7 + 5 * 8 };
 
  def f'(y-x) {
-  y-x * 7 + 5 * 8; }; ]
+  y-x * 7 + 5 * 8 }; ]
 
 @doc{
  An important thing to know about Rack and algebraic expressions is
@@ -66,15 +66,15 @@ automatically. A few of them have interesting precedence (taken from
 C), but most have precedence like multiplications.
 
 @code[
- def ⊏⊏⊏ (x, y) { true; }
+ def |⊏⊏⊏| (x, y) { true; };
  check 3 ⊏⊏⊏ 7 = true; ]
 
 If you want to use something else like it is an operator, you can put it
 inside of backticks.
 
 @code[
- def g (x, y) { x + y; }
- check 10 `g` 11 = 21; ]
+ def g (x, y) { x + y; };
+ check 10 `g` 11 = 21 ]
 
 In Rack, parentheses are always "meaningless" and used exclusively for
 grouping. The @"@" sign always means a text component, except in a

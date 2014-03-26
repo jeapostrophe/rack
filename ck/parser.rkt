@@ -36,14 +36,33 @@
 (define (count-while ip ?)
   (count-until ip (λ (c) (not (? c)))))
 
+(define (slurp-whitespace ip)
+  (read-until-not ip char-whitespace?))
+
 ;; ast
+
+;; xxx modify ast to account for details of how the program was really
+;; written (i.e. the presence of unnecessary ()s, ``s, and @) so that
+;; it can be "reprinted"
+
+;; xxx implement testing system
+
+;; xxx implement srcloc system
+
+(struct pre-term () #:transparent)
+(struct pre-term:op pre-term (t) #:transparent)
+
+(define un-pre-term:op
+  (match-lambda
+   [(pre-term:op t)
+    t]
+   [t
+    t]))
 
 (struct term () #:transparent)
 (struct term:num term (n) #:transparent)
 (struct term:str term (str) #:transparent)
 (struct term:id term (sym) #:transparent)
-(struct term:op term (sym) #:transparent)
-(struct term:keyword term (sym) #:transparent)
 
 (struct term:comment term (l) #:transparent)
 (struct term:group term (l) #:transparent)
@@ -51,9 +70,6 @@
 (struct term:brackets term (l) #:transparent)
 
 ;; real code
-
-(define (slurp-whitespace ip)
-  (read-until-not ip char-whitespace?))
 
 (define (parse-rk-file ip)
   (and
@@ -91,7 +107,6 @@
        (if (zero? len)
          v
          (merging-cons (term:str str) v)))
-     (eprintf "got ~v\n" str)
      (match (peek-char ip)
        [#\@
         (kontA
@@ -136,10 +151,21 @@
     [_
      (maybe-parse-rk-term ip)]))
 
+(define-syntax-rule (define-char-predicate id str)
+  (begin (define cs (string->list str))
+         (define (id c) (member c cs))))
+
+(define-char-predicate char-closing-forms? ")]}`|")
+(define-char-predicate char-not-in-id? "\"([{}])`;,|")
+
+(define (parse-rk-term ip)
+  (define v (maybe-parse-rk-term ip))
+  (unless v
+    (error 'parse-rk-term "expected rk-term at ~e" (port->string ip)))
+  v)
+
 (define (maybe-parse-rk-term ip)
   (match (peek-char ip)
-    [#\#
-     (parse-rk-hash ip)]
     [#\"
      (parse-rk-string ip)]
     [#\@
@@ -156,21 +182,77 @@
      (expect ip "[")
      (begin0 (term:brackets (parse-rk-terms ip))
              (expect ip "]"))]
-    ;; xxx backticks
-    [(? char-initial-operator?)
-     (parse-rk-operator ip)]
-    [(? char-initial-id?)
-     (parse-rk-id ip)]
-    [(? char-numeric?)
-     (parse-rk-num ip)]
+    [#\`
+     (expect ip "`")
+     (begin0 (pre-term:op (parse-rk-term ip))
+             (expect ip "`"))]
+    [#\|
+     (expect ip "|")
+     (begin0 (un-pre-term:op (parse-rk-term ip))
+             (expect ip "|"))]
+    [(? char-closing-forms?)
+     #f]
     [_
-     #f]))
+     (parse-rk-atom ip)]))
 
-;; xxx
-(define (parse-rk-num ip)
-  (define len (count-while ip char-numeric?))
-  (define s (read-string len ip))
-  (term:num (string->number s)))
+(define (parse-rk-atom ip)
+  (define len
+    (count-until
+     ip
+     (λ (c) (or (char-whitespace? c)
+                (char-iso-control? c)
+                (char-not-in-id? c)))))
+  (cond
+    [(zero? len)
+     (define s
+       (match (peek-char ip)
+         [#\; '|;|]
+         [#\, '|,|]
+         [_
+          (error 'parse-rk-atom "expected a special symbol, got ~e"
+                 (port->string ip))]))
+     (read-char ip)
+     (pre-term:op (term:id s))]
+    [else
+     (define s (read-string len ip))
+     (define sl (string->list s))
+     (cond
+       ;;     sign = + | -
+       ;; 0b-digit = {0 1}
+       ;; 0o-digit = {0 1 2 3 4 5 6 7}
+       ;; 0d-digit = {0 1 2 3 4 5 6 7 8 9}
+       ;; 0x-digit = {0 1 2 3 4 5 6 7 8 9 a A b B c C d D e E f F}
+       ;;  isuffix = i{ 1  8 16 32  64}
+       ;;  fsuffix = f{16 32 64 80 128}
+       ;;   period = .
+       ;;   prefix = 0b | 0o | 0d | 0x
+       ;;      num = sign? 0d-digit+ period 0d-digit+ fsuffix?
+       ;;          | sign? 0d-digit+ isuffix?
+       ;;          | prefix prefix-digit+ isuffix?
+       [(regexp-match #rx"^([+-])?([0-9]+)(i(1|8|16|32|64))?$" s)
+        => (match-lambda
+            [(list _ maybe-sign number-str _ maybe-size)
+             ;; xxx sign and size
+             (term:num (string->number number-str))])]
+       [#f ;; xxx
+        #rx"^([+-])?([0-9]+\\.[0-9]+|nan\\.0|inf\\.0)(f(16|32|64|80|128))?$"
+        #rx"^0b([0-1]+)(i(1|8|16|32|64))?$"
+        #rx"^0o([0-7]+)(i(1|8|16|32|64))?$"
+        #rx"^0d([0-9]+)(i(1|8|16|32|64))?$"
+        #rx"^0x([0-9A-Fa-f]+)(i(1|8|16|32|64))?$"
+        ;; xxx read single unicode character as a number
+        #rx"^0u(.)(i(1|8|16|32|64))?$"]
+       ;; An operator contains no numbers or alphabetic characters
+       [(not
+         (ormap (λ (c) (or (char-alphabetic? c)
+                           (char-numeric? c)))
+                sl))
+        (pre-term:op (term:id (string->symbol s)))]
+       ;; An identifier doesn't start with a ([+-]?[0-9]) to prevent
+       [(not (regexp-match #rx"^[+-]?[0-9]" s))
+        (term:id (string->symbol s))]
+       [else
+        (error 'parse-rk-atom "lost at ~e" s)])]))
 
 (define (parse-rk-string ip)
   (expect ip "\"")
@@ -178,62 +260,6 @@
   (define s (read-string len ip))
   (expect ip "\"")
   (term:str s))
-
-(define id-enders "{}[]@()\"\"")
-
-(define (char-id-ender? c)
-  (ormap (λ (c1) (char=? c c1))
-         (string->list id-enders)))
-
-;; xxx
-(define (char-initial-operator? c)
-  (or (char=? c #\;)
-      (char=? c #\,)
-      (member (char-general-category c) '(sm))))
-
-(define (parse-rk-operator ip)
-  (define len
-    (count-until ip
-                 (λ (c)
-                   (or (char-whitespace? c)
-                       (char-id-ender? c)
-                       (char-iso-control? c)))))
-  (when (zero? len)
-    (error 'parse-rk-id "empty op: ~e" (port->string ip)))
-  (define s (read-string len ip))
-  (term:op (string->symbol s)))
-
-;; xxx
-(define (char-initial-id? c)
-  (not
-   (or (char-whitespace? c)
-       (char-numeric? c)
-       (char-iso-control? c)
-       (char-id-ender? c))))
-
-(define (parse-rk-id ip)
-  (define len
-    (count-until ip
-                 (λ (c) (or (char-whitespace? c)
-                            (char=? c #\;)
-                            (char=? c #\,)
-                            (char-id-ender? c)
-                            (char-iso-control? c)))))
-  (when (zero? len)
-    (error 'parse-rk-id "empty id: ~e" (port->string ip)))
-  (term:id (string->symbol (read-string len ip))))
-
-(define (parse-rk-hash ip)
-  (expect ip "#")
-  (match (peek-char ip)
-    [#\:
-     (expect ip ":")
-     (define s (parse-rk-id ip))
-     (unless s
-       (error 'parse-rk-hash "expected id after #:, got ~v" s))
-     (term:keyword s)]
-    [_
-     (error 'parse-rk-hash "~v" (port->string ip))]))
 
 (define (maybe-parse-text-datums ip)
   (match (peek-char ip)
@@ -254,27 +280,91 @@
     [_
      #f]))
 
-(define (parse-rk-terms ip)
-  (let loop ([stack empty])
-    (slurp-whitespace ip)
-    (match (peek-char ip)
-      ;; xxx implement operator precedence and associativity
-      [_
-       (define t (maybe-parse-rk-term ip))
-       (eprintf "prt ~v\n" t)
-       (if t
-         (loop (cons t stack))
-         (reverse stack))])))
+(struct pre-terms (rands rators) #:transparent)
 
-(define-syntax-rule (define-undefined id)
-  (define (id . args)
-    (error 'id "unimplemented: ~v"
-           (map
-            (λ (x)
-              (if (input-port? x)
-                (port->string x)
-                x))
-            args))))
+;; xxx at the very least, ; is busted
+(define (parse-rk-terms ip)
+  (define (E st)
+    (define next (P st))
+    (cond
+      [(pre-term:op? next)
+       (E (push-rator (pre-term:op-t next) st))]
+      [next
+       (E (push-rand next st))]
+      [else
+       (pop-rators st)]))
+  (define (pop-rators st)
+    (if (empty? (pre-terms-rators st))
+      (reverse (pre-terms-rands st))
+      (pop-rators (pop-rator st))))
+  (define (pop-rator st)
+    (match st
+      [(pre-terms (list-rest t1 t0 rands) (list-rest rator rators))
+       (pre-terms (list* (term:group (list rator t0 t1)) rands) rators)]
+      [(pre-terms (list t0) (list-rest rator rators))
+       (pre-terms (list (term:group (list rator t0))) rators)]
+      [_
+       (error 'pop-rator "can't deal with stack: ~e" st)]))
+  (define (push-rand next st)
+    (match-define (pre-terms rands rators) st)
+    (pre-terms (cons next rands) rators))
+  (define (op-precedence o)
+    (case (term:id-sym o)
+      [(-> |.|)
+       100]
+      [(! ~ ++ -- &)
+       90]
+      [(* / %)
+       80]
+      [(+ -)
+       70]
+      [(<< >>)
+       60]
+      [(< <= > >=)
+       50]
+      [(&)
+       40]
+      [(^)
+       30]
+      [(|/\\|)
+       20]
+      [(|\\/|)
+       10]
+      [(|,|)
+       5]
+      [(=)
+       -10]
+      [(|;|)
+       -20]
+      [else
+       0]))
+  (define (op-precedence< y x)
+    (match* (x y)
+      [(#f _)
+       #f]
+      [(_ #f)
+       (error 'op-precedence< "impossible case: ~e ~e\n" y x)]
+      [(_ _)
+       (< (op-precedence y)
+          (op-precedence x))]))
+  (define (top-op st)
+    (match-define (pre-terms rands rators) st)
+    (match rators
+      [(list)
+       #f]
+      [(list-rest op _)
+       op]))
+  (define (push-rator op st)
+    (cond
+      [(op-precedence< op (top-op st))
+       (push-rator op (pop-rator st))]
+      [else
+       (match-define (pre-terms rands rators) st)
+       (pre-terms rands (cons op rators))]))
+  (define (P st)
+    (slurp-whitespace ip)
+    (maybe-parse-rk-term ip))
+  (E (pre-terms empty empty)))
 
 (module+ test
   (require racket/runtime-path
