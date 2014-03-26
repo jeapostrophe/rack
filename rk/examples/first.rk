@@ -63,10 +63,12 @@ unnamed block which can be quoted in its entirety.
 Something interesting about Rack is that all identifiers made up
 exclusively with characters from the Unicode category Sm are operators
 automatically. A few of them have interesting precedence (taken from
-C), but most have precedence like multiplications.
+C), but most have precedence like multiplications. However, when you
+don't want to use them in a binary way, you must wrap them in
+backticks, which swap operator-ness.
 
 @code[
- def |⊏⊏⊏| (x, y) { true; };
+ def `⊏⊏⊏` (x, y) { true; };
  check 3 ⊏⊏⊏ 7 = true; ]
 
 If you want to use something else like it is an operator, you can put it
