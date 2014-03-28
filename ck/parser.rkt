@@ -27,7 +27,7 @@
 
 (define (read-until-not ip ?)
   (define c (peek-char ip))
-  (when (? c)
+  (when (and (char? c) (? c))
     (read-char ip)
     (read-until-not ip ?)))
 
@@ -64,16 +64,23 @@
 
 (module+ test
   (define-syntax-rule (check-rd f is eop os)
-    (let ()
-      (define ip (open-input-string is))
-      (port-count-lines! ip)
-      (define ao (f ip))
-      (match ao
-        [eop
-         (check-equal? #t #t)]
-        [_
-         (check-equal? #t #f)])
-      (check-equal? (port->string ip) os)))
+    (test-case
+     (format "(~a ~v)" 'f is)
+     (let ()
+       (define ip (open-input-string is))
+       (port-count-lines! ip)
+       (define ao
+         (with-handlers
+             ([exn:fail?
+               (λ (x)
+                 (fail (format "threw error: ~e" (exn-message x))))])
+           (f ip)))
+       (match ao
+         [eop
+          (check-equal? #t #t)]
+         [_
+          (fail (format "~e did not match ~v" ao 'eop))])
+       (check-equal? (port->string ip) os))))
   (define-syntax-rule (check-rd-err f is)
     (let ()
       (define ip (open-input-string is))
@@ -104,7 +111,7 @@
   (begin (define cs (string->list str))
          (define (id c) (member c cs))))
 
-(define-char-predicate char-closing-forms? ")]}`")
+(define-char-predicate char-closing-forms? ")]}")
 (define-char-predicate char-not-in-id? "\"([{}])`;,")
 
 (define (rd-atom ip)
@@ -182,15 +189,10 @@
   (check-rd rd-atom "a" (term:surface:id _ 'a) "")
   (check-rd rd-atom "a," (term:surface:id _ 'a) ",")
   (check-rd rd-atom "a;" (term:surface:id _ 'a) ";")
+  (check-rd rd-atom "a`" (term:surface:id _ 'a) "`")
   (check-rd-err rd-atom "+4a")
   (check-rd-err rd-atom "-4a")
   (check-rd-err rd-atom "4a"))
-
-(define (rd-term ip)
-  (or (rd*-term ip)
-      (read-error ip "term" "nothing")))
-
-;; xxx rd-term tests
 
 (define (rd*-term ip)
   (match (peek-char ip)
@@ -205,14 +207,64 @@
     [#\[
      (rd-wrapped ip "[" "]" rd-terms term:surface:brackets)]
     [#\`
-     ;; xxx why term and not terms here?
      (rd-wrapped ip "`" "`" rd-term term:surface:swap)]
-    [(? char-closing-forms?)
+    [(or (? eof-object?)
+         (? char-closing-forms?)
+         (? char-whitespace?))
      #f]
     [_
      (rd-atom ip)]))
 
-;; xxx rd*-term tests
+(module+ test
+  (check-rd rd*-term "" #f "")
+  (check-rd rd*-term " more" #f " more")
+  (check-rd rd*-term "\"foo\"bar"
+            (term:surface:str _ "foo") "bar")
+  (check-rd rd*-term "@foo bar"
+            (term:surface:text-form _ (term:surface:id _ 'foo) #f #f) " bar")
+  (check-rd rd*-term "(foo bar)zog"
+            (term:surface:parens
+             _
+             (term:surface:group _ (list (term:surface:id _ 'foo)
+                                         (term:surface:id _ 'bar)))) "zog")
+  (check-rd rd*-term "{foo bar}zog"
+            (term:surface:braces
+             _
+             (term:surface:group _ (list (term:surface:id _ 'foo)
+                                         (term:surface:id _ 'bar)))) "zog")
+  (check-rd rd*-term "[foo bar]zog"
+            (term:surface:brackets
+             _
+             (term:surface:group _ (list (term:surface:id _ 'foo)
+                                         (term:surface:id _ 'bar)))) "zog")
+  (check-rd rd*-term "`foo`zog"
+            (term:surface:swap _ (term:surface:id _ 'foo)) "zog")
+  (check-rd rd*-term "``foo``zog"
+            (term:surface:swap _ (term:surface:swap _ (term:surface:id _ 'foo)))
+            "zog")
+  (check-rd rd*-term "`(foo bar)`zog"
+            (term:surface:swap
+             _
+             (term:surface:parens
+              _
+              (term:surface:group
+               _ (list (term:surface:id _ 'foo) (term:surface:id _ 'bar))))) "zog")
+  (check-rd rd*-term ")bar" #f ")bar")
+  (check-rd rd*-term "]bar" #f "]bar")
+  (check-rd rd*-term "}bar" #f "}bar")
+  (check-rd rd*-term "foo" (term:surface:id _ 'foo) ""))
+
+(define (rd-term ip)
+  (or (rd*-term ip)
+      (read-error ip "term" "nothing")))
+
+(module+ test
+  (check-rd-err rd-term "")
+  (check-rd-err rd-term " more")
+  (check-rd-err rd-term ")bar")
+  (check-rd-err rd-term "]bar")
+  (check-rd-err rd-term "}bar")
+  (check-rd rd-term "foo" (term:surface:id _ 'foo) ""))
 
 (define (rd-terms ip)
   (define start (port-location ip))
@@ -225,17 +277,31 @@
         empty)))
   (term:surface:group (locs->srcloc start ip) result))
 
-;; xxx rd-terms tests
-
-(define (rd-text-form ip)
-  (define start (port-location ip))
-  (expect ip "@")
-  (define cmd (rd*-text-cmd ip))
-  (define datums (rd*-text-datums ip))
-  (define body (rd*-text-body ip))
-  (term:surface:text-form (locs->srcloc start ip) cmd datums body))
-
-;; xxx rd-text-form
+(module+ test
+  (check-rd rd-terms "" (term:surface:group _ empty) "")
+  (check-rd rd-terms "]" (term:surface:group _ empty) "]")
+  (check-rd rd-terms ")" (term:surface:group _ empty) ")")
+  (check-rd rd-terms "}" (term:surface:group _ empty) "}")
+  (check-rd rd-terms "foo}"
+            (term:surface:group _ (list (term:surface:id _ 'foo))) "}")
+  (check-rd rd-terms "foo bar}"
+            (term:surface:group _ (list (term:surface:id _ 'foo)
+                                        (term:surface:id _ 'bar))) "}")
+  (check-rd rd-terms "[foo]}"
+            (term:surface:group
+             _ (list
+                (term:surface:brackets
+                 _ (term:surface:group _ (list (term:surface:id _ 'foo)))))) "}")
+  (check-rd rd-terms "(foo)}"
+            (term:surface:group
+             _ (list
+                (term:surface:parens
+                 _ (term:surface:group _ (list (term:surface:id _ 'foo)))))) "}")
+  (check-rd rd-terms "{foo}}"
+            (term:surface:group
+             _ (list
+                (term:surface:braces
+                 _ (term:surface:group _ (list (term:surface:id _ 'foo)))))) "}"))
 
 (define (rd*-text-cmd ip)
   (match (peek-char ip)
@@ -244,7 +310,11 @@
     [_
      (rd*-term ip)]))
 
-;; xxx rd*-text-cmd
+(module+ test
+  (check-rd rd*-text-cmd "foo[]{}" (term:surface:id _ 'foo) "[]{}")
+  (check-rd rd*-text-cmd "(foo)[]{}" (term:surface:parens _ (term:surface:group _ (list (term:surface:id _ 'foo)))) "[]{}")
+  (check-rd rd*-text-cmd "[foo]{}" #f "[foo]{}")
+  (check-rd rd*-text-cmd "{foo}" #f "{foo}"))
 
 (define (rd*-text-datums ip)
   (match (peek-char ip)
@@ -253,31 +323,9 @@
     [_
      #f]))
 
-;; xxx rd*-text-datums
-
-(define (rd*-text-body ip)
-  (match (peek-char ip)
-    [#\{
-     (rd-wrapped ip "{" "}" rd-terms term:surface:braces)]
-    [_
-     #f]))
-
-;; xxx rd*-text-body
-
-(define (rd-file ip)
-  (and
-   (expect ip "#lang")
-   (slurp-whitespace ip)
-   (expect ip "rk")
-   (expect-char ip char-whitespace?)
-   (rd-text-outer ip)))
-
-;; xxx rd-file
-
-(define (rd-text-outer ip)
-  (rd-text ip #f))
-(define (rd-text-inner ip)
-  (rd-text ip #t))
+(module+ test
+  (check-rd rd*-text-datums "{foo}" #f "{foo}")
+  (check-rd rd*-text-datums "[foo]{bar}" (term:surface:brackets _ (term:surface:group _ (list (term:surface:id _ 'foo)))) "{bar}"))
 
 (define (rd-text ip inside?)
   (define start (port-location ip))
@@ -308,14 +356,154 @@
   (define src (locs->srcloc start ip))
   (term:surface:text src result))
 
-;; xxx rd-text-outer
-;; xxx rd-text-inner
+(define (rd-text-inner ip)
+  (rd-text ip #t))
 
-;; ast
+(module+ test
+  (check-rd rd-text-inner "foo bar baz" (term:surface:text _ (list (term:surface:str _ "foo bar baz"))) "")
+  (check-rd rd-text-inner "foo bar}baz" (term:surface:text _ (list (term:surface:str _ "foo bar"))) "}baz")
+  (check-rd rd-text-inner "foo @zog bar}baz"
+            (term:surface:text
+             _ (list (term:surface:str _ "foo ")
+                     (term:surface:text-form
+                      _
+                      (term:surface:id _ 'zog)
+                      #f
+                      #f)
+                     (term:surface:str _ " bar")))
+            "}baz"))
 
-;; xxx modify ast to account for details of how the program was really
-;; written (i.e. the presence of unnecessary ()s, ``s, and @) so that
-;; it can be "reprinted"
+(define (rd*-text-body ip)
+  (match (peek-char ip)
+    [#\{
+     (rd-wrapped ip "{" "}" rd-text-inner term:surface:braces)]
+    [_
+     #f]))
+
+(module+ test
+  (check-rd rd*-text-body "@foo" #f "@foo")
+  (check-rd rd*-text-body "{foo bar baz}" (term:surface:braces _ (term:surface:text _ (list (term:surface:str _ "foo bar baz")))) "")
+  (check-rd rd*-text-body "{foo bar}baz" (term:surface:braces _ (term:surface:text _ (list (term:surface:str _ "foo bar")))) "baz")
+  (check-rd rd*-text-body "{foo @zog bar}baz"
+            (term:surface:braces
+             _
+             (term:surface:text
+              _ (list (term:surface:str _ "foo ")
+                      (term:surface:text-form
+                       _
+                       (term:surface:id _ 'zog)
+                       #f
+                       #f)
+                      (term:surface:str _ " bar"))))
+            "baz"))
+
+(define (rd-text-form ip)
+  (define start (port-location ip))
+  (expect ip "@")
+  (define cmd (rd*-text-cmd ip))
+  (define datums (rd*-text-datums ip))
+  (define body (rd*-text-body ip))
+  (term:surface:text-form (locs->srcloc start ip) cmd datums body))
+
+(module+ test
+  (check-rd rd-text-form "@foo[bar]{zog}more"
+            (term:surface:text-form
+             _ (term:surface:id _ 'foo)
+             (term:surface:brackets
+              _ (term:surface:group _ (list (term:surface:id _ 'bar))))
+             (term:surface:braces
+              _ (term:surface:text _ (list (term:surface:str _ "zog")))))
+            "more")
+  (check-rd rd-text-form "@foo[bar]more"
+            (term:surface:text-form
+             _ (term:surface:id _ 'foo)
+             (term:surface:brackets
+              _ (term:surface:group _ (list (term:surface:id _ 'bar))))
+             #f)
+            "more")
+  (check-rd rd-text-form "@[bar]more"
+            (term:surface:text-form
+             _ #f
+             (term:surface:brackets
+              _ (term:surface:group _ (list (term:surface:id _ 'bar))))
+             #f)
+            "more")
+  (check-rd rd-text-form "@[bar]{zog}more"
+            (term:surface:text-form
+             _ #f
+             (term:surface:brackets
+              _ (term:surface:group _ (list (term:surface:id _ 'bar))))
+             (term:surface:braces
+              _ (term:surface:text _ (list (term:surface:str _ "zog")))))
+            "more")
+  (check-rd rd-text-form "@{zog}more"
+            (term:surface:text-form
+             _ #f
+             #f
+             (term:surface:braces
+              _ (term:surface:text _ (list (term:surface:str _ "zog")))))
+            "more")
+  (check-rd rd-text-form "@foo[bar] {zog}more"
+            (term:surface:text-form
+             _ (term:surface:id _ 'foo)
+             (term:surface:brackets
+              _ (term:surface:group _ (list (term:surface:id _ 'bar))))
+             #f)
+            " {zog}more")
+  (check-rd rd-text-form "@foo [bar]{zog}more"
+            (term:surface:text-form
+             _ (term:surface:id _ 'foo)
+             #f
+             #f)
+            " [bar]{zog}more")
+  (check-rd rd-text-form "@ foo[bar]{zog}more"
+            (term:surface:text-form
+             _ #f
+             #f
+             #f)
+            " foo[bar]{zog}more"))
+
+(define (rd-text-outer ip)
+  (rd-text ip #f))
+
+(module+ test
+  (check-rd rd-text-outer "foo bar baz" (term:surface:text _ (list (term:surface:str _ "foo bar baz"))) "")
+  (check-rd rd-text-outer "foo bar}baz" (term:surface:text _ (list (term:surface:str _ "foo bar}baz"))) "")
+  (check-rd rd-text-outer "foo @zog bar}baz"
+            (term:surface:text
+             _ (list (term:surface:str _ "foo ")
+                     (term:surface:text-form
+                      _
+                      (term:surface:id _ 'zog)
+                      #f
+                      #f)
+                     (term:surface:str _ " bar}baz")))
+            ""))
+
+(define (rd-file ip)
+  (define file-start (port-location ip))
+  (expect ip "#lang")
+  (expect-char ip char-whitespace?)
+  (slurp-whitespace ip)
+  (define lang-start (port-location ip))
+  (expect ip "rk")
+  (define lang
+    (term:surface:str (locs->srcloc lang-start ip) "rk"))
+  (expect-char ip char-whitespace?)
+  (define content
+    (rd-text-outer ip))
+  (term:surface:file (locs->srcloc file-start ip) lang content))
+
+(module+ test
+  (check-rd rd-file "#lang rk foo"
+            (term:surface:file
+             _ (term:surface:str _ "rk")
+             (term:surface:text
+              _ (list (term:surface:str _ "foo"))))
+            "")
+  (check-rd-err rd-file "#langrk foo")
+  (check-rd-err rd-file "#lang rkfoo")
+  (check-rd-err rd-file "#lang rkt foo"))
 
 (module+ old
   (struct pre-term () #:transparent)
