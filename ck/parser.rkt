@@ -232,21 +232,23 @@
            racket/pretty)
   (define-runtime-path examples "../rk/examples")
 
-  (define (print-prep v)
-    (cond
-      [(srcloc? v)
-       '_]
-      [(struct? v)
-       (print-prep (struct->vector v))]
-      [(vector? v)
-       (for/list ([e (in-vector v)]) (print-prep e))]
-      [(list? v)
-       (for/list ([e (in-list v)]) (print-prep e))]
-      [else
-       v]))
+  (define (pp v)
+    (match v
+      [(term:ast-file _ l c)
+       (cons (pp l) (pp c))]
+      [(term:ast:str _ s)
+       s]
+      [(term:ast:id _ s)
+       s]
+      [(term:ast:num _ s)
+       s]
+      [(term:ast:list:empty _)
+       null]
+      [(term:ast:list:cons _ f r)
+       (cons (pp f) (pp r))]))
 
   (define fip (open-input-file (build-path examples "first.rk")))
   (port-count-lines! fip)
-  (pretty-print
-   (print-prep
+  (pretty-write
+   (pp
     (en-file (rd-file fip)))))
