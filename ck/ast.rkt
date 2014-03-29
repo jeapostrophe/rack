@@ -4,23 +4,40 @@
 
 (define-types
   [(term [src srcloc?])
+   
+   [(surface-file
+     [lang term:surface:str?]
+     [content term:surface?])]
    [surface
     [(op [t term:surface?])]
-    [(group [t (listof term:surface?)])]
+    [list
+     [empty]
+     [(cons [first term:surface?]
+            [rest term:surface:list?])]]
     [(swap [t term:surface?])]
     [(parens [t term:surface?])]
     [(braces [t term:surface?])]
     [(brackets [t term:surface?])]
-    [(text [t (listof term:surface?)])]
+    [(text [t term:surface?])]
     [(text-form [cmd (or/c #f term:surface?)]
-                [datums (or/c #f term:surface?)]
-                [body (or/c #f term:surface?)])]
-    [(file [lang term:surface:str?]
-           [content term:surface?])]
-    
-    [(str [s string?])]    
+                [datums (or/c #f term:surface:brackets?)]
+                [body (or/c #f term:surface:braces?)])]
+
+    [(str [s string?])]
     [(id [s symbol?])]
     ;; xxx be more specific
     [(num [n number?])]]
-   [ast]])
 
+   [(ast-file
+     [lang term:ast:str?]
+     [content term:ast?])]
+   [ast
+    [list
+     [empty]
+     [(cons [first term:ast?]
+            [rest term:ast:list?])]]
+
+    [(str [s string?])]
+    [(id [s symbol?])]
+    ;; xxx be more specific
+    [(num [n number?])]]])

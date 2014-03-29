@@ -1,11 +1,82 @@
 #lang racket/base
-(require racket/port
-         racket/list
+(require racket/list
          racket/match
+         unstable/match
          rack/ck/ast
          rack/ck/reader)
 (module+ test
   (require rackunit))
+
+(define (loc-merge x y)
+  (match-define (srcloc src1 line1 col1 pos1 span1) x)
+  (match-define (srcloc src2 line2 col2 pos2 span2) y)
+  (srcloc src1 line1 col1 pos1 (- (+ pos2 span2) pos1)))
+
+;; xxx loc-merge
+
+(define str-merge
+  (match-lambda
+   [(list)
+    (list)]
+   [(list* (term:ast:str loc1 s1)
+           (term:ast:str loc2 s2)
+           more)
+    (str-merge (term:ast:str (loc-merge loc1 loc2) (string-append s1 s2))
+               more)]
+   [(list* before after)
+    (list* before (str-merge after))]))
+
+;; xxx str-merge
+
+(define (en-error loc msg)
+  (error 'en "~a: ~a" loc msg))
+
+;; (en)forest : surface -> ast
+(define (en s)
+  (match s
+    [(term:surface:str loc s)
+     (term:ast:str loc s)]
+    [(term:surface:id loc s)
+     (term:ast:id loc s)]
+    [(term:surface:num loc s)
+     (term:ast:num loc s)]
+    [(term:surface:text loc l)
+     (define el (map en l))
+     (term:ast:group loc (str-merge el))]
+    [(term:surface:text-form loc cmd datums body)
+     (define skip (term:ast:group loc empty))
+     (match* (cmd datums body)
+       [(#f #f #f)
+        (en-error loc "illegal text-form")]
+       [((term:surface:id _ '|;|) (not #f) _)
+        ;; xxx why bother?
+        (en-error loc "illegal comment")]
+       [((not #f) #f #f)
+        cmd]
+       [(_
+         (or (as ([datums skip]) #f)
+             (term:surface:brackets _ datums))
+         (or (as ([body skip]) #f)
+             (term:surface:braces _ body)))
+        (define inner
+          (append (term:ast:group-as (en datums))
+                  (term:ast:group-as (en body))))
+        (if cmd
+          (term:ast:group loc (cons (en cmd) inner))
+          (term:ast:group loc inner))])]))
+
+;; xxx en tests
+
+(define (en-file s)
+  (match-define (term:surface-file loc lang c) s)
+  (match-define (term:ast:group ec-loc ec-l) (en c))
+  (term:ast-file
+   loc (en lang)
+   (term:ast:group ec-loc
+                   (cons (term:ast:id loc '#%module)
+                         ec-l))))
+
+;; xxx en-file tests
 
 (module+ old
   (struct pre-term () #:transparent)
@@ -29,29 +100,9 @@
   (struct term:brackets term (l) #:transparent)
 
   ;; real code
-  (define (merging-cons v l)
-    (match* (v l)
-      [((term:str s1) (cons (term:str s2) l))
-       (cons (term:str (string-append s1 s2)) l)]
-      [(_ _)
-       (cons v l)]))
-
   '(match* (cmd datums body)
      [('comment #f (term:group l))
-      (term:comment l)]
-     [((not #f) #f (term:group l))
-      (term:group (cons cmd l))]
-     [((not #f) (list d ...) (term:group l))
-      (term:group (cons cmd (append d l)))]
-     [((not #f) (list d ...) #f)
-      (term:group (cons cmd d))]
-     [((not #f) #f #f)
-      cmd]
-     [(#f #f (term:group l))
-      body]
-     [(_ _ _)
-      (error 'parse-text-form "invalid text-form: ~v"
-             (vector cmd datums body))])
+      (term:comment l)])
 
   (struct pre-terms (rands rators) #:transparent)
 
@@ -158,4 +209,6 @@
 
   (define fip (open-input-file (build-path examples "first.rk")))
   (port-count-lines! fip)
-  (pretty-print (print-prep (rd-file fip))))
+  (pretty-print
+   (print-prep
+    (en-file (rd-file fip)))))
