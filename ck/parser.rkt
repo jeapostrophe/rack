@@ -1,11 +1,19 @@
 #lang racket/base
-(require racket/list
-         racket/match
+(require racket/match
          unstable/match
          rack/ck/ast
          rack/ck/reader)
 (module+ test
   (require rackunit))
+
+(define (term:ast:list-append x y)
+  (match x
+    [(term:ast:list:empty _)
+     y]
+    [(term:ast:list:cons loc f r)
+     (term:ast:list:cons loc f (term:ast:list-append r y))]))
+
+;; xxx term:ast:list-append
 
 (define (loc-merge x y)
   (match-define (srcloc src1 line1 col1 pos1 span1) x)
@@ -14,17 +22,24 @@
 
 ;; xxx loc-merge
 
-(define str-merge
-  (match-lambda
-   [(list)
-    (list)]
-   [(list* (term:ast:str loc1 s1)
-           (term:ast:str loc2 s2)
-           more)
-    (str-merge (term:ast:str (loc-merge loc1 loc2) (string-append s1 s2))
-               more)]
-   [(list* before after)
-    (list* before (str-merge after))]))
+(define (str-merge s)
+  (match s
+    [(term:ast:list:empty loc)
+     s]
+    [(term:ast:list:cons
+      loc1 (term:ast:str loc2 s1)
+      (term:ast:list:cons
+       loc3 (term:ast:str loc4 s2)
+       more))
+     (str-merge
+      (term:ast:list:cons
+       (loc-merge loc1 loc3)
+       (term:ast:str (loc-merge loc2 loc4) (string-append s1 s2))
+       more))]
+    [(term:ast:list:cons
+      loc1 before after)
+     (term:ast:list:cons
+      loc1 before (str-merge after))]))
 
 ;; xxx str-merge
 
@@ -38,13 +53,32 @@
      (term:ast:str loc s)]
     [(term:surface:id loc s)
      (term:ast:id loc s)]
+    [(term:surface:op loc s)
+     (en s)]
+    [(term:surface:parens loc s)
+     (en s)]
+    [(term:surface:swap loc s)
+     (en s)]
+    [(term:surface:braces loc s)
+     (term:ast:list:cons
+      loc
+      (term:ast:id loc '#%braces)
+      (en s))]
+    [(term:surface:brackets loc s)
+     (term:ast:list:cons
+      loc
+      (term:ast:id loc '#%brackets)
+      (en s))]
     [(term:surface:num loc s)
      (term:ast:num loc s)]
     [(term:surface:text loc l)
-     (define el (map en l))
-     (term:ast:group loc (str-merge el))]
+     (str-merge (en l))]
+    [(term:surface:list:empty loc)
+     (term:ast:list:empty loc)]
+    [(term:surface:list:cons loc first-t rest-t)
+     (term:ast:list:cons loc (en first-t) (en rest-t))]
     [(term:surface:text-form loc cmd datums body)
-     (define skip (term:ast:group loc empty))
+     (define skip (term:surface:list:empty loc))
      (match* (cmd datums body)
        [(#f #f #f)
         (en-error loc "illegal text-form")]
@@ -52,29 +86,29 @@
         ;; xxx why bother?
         (en-error loc "illegal comment")]
        [((not #f) #f #f)
-        cmd]
+        (en cmd)]
        [(_
          (or (as ([datums skip]) #f)
              (term:surface:brackets _ datums))
          (or (as ([body skip]) #f)
              (term:surface:braces _ body)))
         (define inner
-          (append (term:ast:group-as (en datums))
-                  (term:ast:group-as (en body))))
+          (term:ast:list-append (en datums) (en body)))
         (if cmd
-          (term:ast:group loc (cons (en cmd) inner))
-          (term:ast:group loc inner))])]))
+          (term:ast:list:cons loc (en cmd) inner)
+          inner)])]
+    [(term loc)
+     (en-error loc (format "unexpected term: ~e" s))]))
 
 ;; xxx en tests
 
 (define (en-file s)
   (match-define (term:surface-file loc lang c) s)
-  (match-define (term:ast:group ec-loc ec-l) (en c))
   (term:ast-file
    loc (en lang)
-   (term:ast:group ec-loc
-                   (cons (term:ast:id loc '#%module)
-                         ec-l))))
+   (term:ast:list:cons
+    loc (term:ast:id loc '#%module-begin)
+    (en c))))
 
 ;; xxx en-file tests
 
@@ -106,6 +140,8 @@
 
   (struct pre-terms (rands rators) #:transparent)
 
+  (require racket/list)
+
   ;; xxx at the very least, ; is busted
   (define (parse-rk-terms ip)
     (define (E st)
@@ -118,7 +154,7 @@
         [else
          (pop-rators st)]))
     (define (pop-rators st)
-      (if (empty? (pre-terms-rators st))
+      (if (null? (pre-terms-rators st))
         (reverse (pre-terms-rands st))
         (pop-rators (pop-rator st))))
     (define (pop-rator st)
