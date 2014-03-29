@@ -56,8 +56,10 @@
     [(term:surface:op loc s)
      (en s)]
     [(term:surface:parens loc s)
-     (en s)]
+     (en s)]    
     [(term:surface:swap loc s)
+     (en s)]
+    [(term:surface:group loc s)
      (en s)]
     [(term:surface:braces loc s)
      (term:ast:list:cons

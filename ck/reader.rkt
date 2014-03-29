@@ -226,29 +226,32 @@
   (check-rd rd*-term "(foo bar)zog"
             (term:surface:parens
              _
-             (term:surface:list:cons
-              _ (term:surface:id _ 'foo)
-              (term:surface:list:cons
-               _ (term:surface:id _ 'bar)
-               (term:surface:list:empty _))))
+             (term:surface:group
+              _ (term:surface:list:cons
+                 _ (term:surface:id _ 'foo)
+                 (term:surface:list:cons
+                  _ (term:surface:id _ 'bar)
+                  (term:surface:list:empty _)))))
             "zog")
   (check-rd rd*-term "{foo bar}zog"
             (term:surface:braces
              _
-             (term:surface:list:cons
-              _ (term:surface:id _ 'foo)
-              (term:surface:list:cons
-               _ (term:surface:id _ 'bar)
-               (term:surface:list:empty _))))
+             (term:surface:group
+              _ (term:surface:list:cons
+                 _ (term:surface:id _ 'foo)
+                 (term:surface:list:cons
+                  _ (term:surface:id _ 'bar)
+                  (term:surface:list:empty _)))))
             "zog")
   (check-rd rd*-term "[foo bar]zog"
             (term:surface:brackets
              _
-             (term:surface:list:cons
-              _ (term:surface:id _ 'foo)
-              (term:surface:list:cons
-               _ (term:surface:id _ 'bar)
-               (term:surface:list:empty _))))
+             (term:surface:group
+              _ (term:surface:list:cons
+                 _ (term:surface:id _ 'foo)
+                 (term:surface:list:cons
+                  _ (term:surface:id _ 'bar)
+                  (term:surface:list:empty _)))))
             "zog")
   (check-rd rd*-term "`foo`zog"
             (term:surface:swap _ (term:surface:id _ 'foo)) "zog")
@@ -260,11 +263,12 @@
              _
              (term:surface:parens
               _
-              (term:surface:list:cons
-               _ (term:surface:id _ 'foo)
-               (term:surface:list:cons
-                _ (term:surface:id _ 'bar)
-                (term:surface:list:empty _)))))
+              (term:surface:group
+               _ (term:surface:list:cons
+                  _ (term:surface:id _ 'foo)
+                  (term:surface:list:cons
+                   _ (term:surface:id _ 'bar)
+                   (term:surface:list:empty _))))))
             "zog")
   (check-rd rd*-term ")bar" #f ")bar")
   (check-rd rd*-term "]bar" #f "]bar")
@@ -285,57 +289,73 @@
 
 (define (rd-terms ip)
   (define start (port-location ip))
-  (slurp-whitespace ip)
-  (define first-t (rd*-term ip))
-  (cond
-    [first-t
-     (define rest-ts (rd-terms ip))
-     (term:surface:list:cons (locs->srcloc start ip)
-                             first-t
-                             rest-ts)]
-    [else
-     (term:surface:list:empty (locs->srcloc start ip))]))
+  (define l
+    (let loop ()
+      (define start (port-location ip))
+      (slurp-whitespace ip)
+      (define first-t (rd*-term ip))
+      (cond
+        [first-t
+         (define rest-ts (loop))
+         (term:surface:list:cons (locs->srcloc start ip)
+                                 first-t
+                                 rest-ts)]
+        [else
+         (term:surface:list:empty (locs->srcloc start ip))])))
+  (term:surface:group (locs->srcloc start ip) l))
 
 (module+ test
-  (check-rd rd-terms "" (term:surface:list:empty _) "")
-  (check-rd rd-terms "]" (term:surface:list:empty _) "]")
-  (check-rd rd-terms ")" (term:surface:list:empty _) ")")
-  (check-rd rd-terms "}" (term:surface:list:empty _) "}")
+  (check-rd rd-terms "" (term:surface:group
+                         _ (term:surface:list:empty _)) "")
+  (check-rd rd-terms "]" (term:surface:group
+                          _ (term:surface:list:empty _)) "]")
+  (check-rd rd-terms ")" (term:surface:group
+                          _ (term:surface:list:empty _)) ")")
+  (check-rd rd-terms "}" (term:surface:group
+                          _ (term:surface:list:empty _)) "}")
   (check-rd rd-terms "foo}"
-            (term:surface:list:cons
-             _ (term:surface:id _ 'foo)
-             (term:surface:list:empty _))
+            (term:surface:group
+             _ (term:surface:list:cons
+                _ (term:surface:id _ 'foo)
+                (term:surface:list:empty _)))
             "}")
   (check-rd rd-terms "foo bar}"
-            (term:surface:list:cons
-             _ (term:surface:id _ 'foo)
-             (term:surface:list:cons
-              _ (term:surface:id _ 'bar)
-              (term:surface:list:empty _)))
+            (term:surface:group
+             _ (term:surface:list:cons
+                _ (term:surface:id _ 'foo)
+                (term:surface:list:cons
+                 _ (term:surface:id _ 'bar)
+                 (term:surface:list:empty _))))
             "}")
   (check-rd rd-terms "[foo]}"
-            (term:surface:list:cons
-             _ (term:surface:brackets
-                _ (term:surface:list:cons
-                   _ (term:surface:id _ 'foo)
-                   (term:surface:list:empty _)))
-             (term:surface:list:empty _))
+            (term:surface:group
+             _ (term:surface:list:cons
+                _ (term:surface:brackets
+                   _ (term:surface:group
+                      _ (term:surface:list:cons
+                         _ (term:surface:id _ 'foo)
+                         (term:surface:list:empty _))))
+                (term:surface:list:empty _)))
             "}")
   (check-rd rd-terms "(foo)}"
-            (term:surface:list:cons
-             _ (term:surface:parens
-                _ (term:surface:list:cons
-                   _ (term:surface:id _ 'foo)
-                   (term:surface:list:empty _)))
-             (term:surface:list:empty _))
+            (term:surface:group
+             _ (term:surface:list:cons
+                _ (term:surface:parens
+                   _ (term:surface:group
+                      _ (term:surface:list:cons
+                         _ (term:surface:id _ 'foo)
+                         (term:surface:list:empty _))))
+                (term:surface:list:empty _)))
             "}")
   (check-rd rd-terms "{foo}}"
-            (term:surface:list:cons
-             _ (term:surface:braces
-                _ (term:surface:list:cons
-                   _ (term:surface:id _ 'foo)
-                   (term:surface:list:empty _)))
-             (term:surface:list:empty _))
+            (term:surface:group
+             _ (term:surface:list:cons
+                _ (term:surface:braces
+                   _ (term:surface:group
+                      _ (term:surface:list:cons
+                         _ (term:surface:id _ 'foo)
+                         (term:surface:list:empty _))))
+                (term:surface:list:empty _)))
             "}"))
 
 (define (rd*-text-cmd ip)
@@ -349,9 +369,10 @@
   (check-rd rd*-text-cmd "foo[]{}" (term:surface:id _ 'foo) "[]{}")
   (check-rd rd*-text-cmd "(foo)[]{}"
             (term:surface:parens
-             _ (term:surface:list:cons
-                _ (term:surface:id _ 'foo)
-                (term:surface:list:empty _))) "[]{}")
+             _ (term:surface:group
+                _ (term:surface:list:cons
+                   _ (term:surface:id _ 'foo)
+                   (term:surface:list:empty _)))) "[]{}")
   (check-rd rd*-text-cmd "[foo]{}" #f "[foo]{}")
   (check-rd rd*-text-cmd "{foo}" #f "{foo}"))
 
@@ -366,9 +387,10 @@
   (check-rd rd*-text-datums "{foo}" #f "{foo}")
   (check-rd rd*-text-datums "[foo]{bar}"
             (term:surface:brackets
-             _ (term:surface:list:cons
-                _ (term:surface:id _ 'foo)
-                (term:surface:list:empty _)))
+             _ (term:surface:group
+                _ (term:surface:list:cons
+                   _ (term:surface:id _ 'foo)
+                   (term:surface:list:empty _))))
             "{bar}"))
 
 (define (rd-text ip inside?)
@@ -491,9 +513,10 @@
             (term:surface:text-form
              _ (term:surface:id _ 'foo)
              (term:surface:brackets
-              _ (term:surface:list:cons
-                 _ (term:surface:id _ 'bar)
-                 (term:surface:list:empty _)))
+              _ (term:surface:group
+                 _ (term:surface:list:cons
+                    _ (term:surface:id _ 'bar)
+                    (term:surface:list:empty _))))
              (term:surface:braces
               _ (term:surface:text
                  _ (term:surface:list:cons
@@ -504,27 +527,30 @@
             (term:surface:text-form
              _ (term:surface:id _ 'foo)
              (term:surface:brackets
-              _ (term:surface:list:cons
-                 _ (term:surface:id _ 'bar)
-                 (term:surface:list:empty _)))
+              _ (term:surface:group
+                 _ (term:surface:list:cons
+                    _ (term:surface:id _ 'bar)
+                    (term:surface:list:empty _))))
              #f)
             "more")
   (check-rd rd-text-form "@[bar]more"
             (term:surface:text-form
              _ #f
              (term:surface:brackets
-              _ (term:surface:list:cons
-                 _ (term:surface:id _ 'bar)
-                 (term:surface:list:empty _)))
+              _ (term:surface:group
+                 _ (term:surface:list:cons
+                    _ (term:surface:id _ 'bar)
+                    (term:surface:list:empty _))))
              #f)
             "more")
   (check-rd rd-text-form "@[bar]{zog}more"
             (term:surface:text-form
              _ #f
              (term:surface:brackets
-              _ (term:surface:list:cons
-                 _ (term:surface:id _ 'bar)
-                 (term:surface:list:empty _)))
+              _ (term:surface:group
+                 _ (term:surface:list:cons
+                    _ (term:surface:id _ 'bar)
+                    (term:surface:list:empty _))))
              (term:surface:braces
               _ (term:surface:text
                  _ (term:surface:list:cons
@@ -545,9 +571,10 @@
             (term:surface:text-form
              _ (term:surface:id _ 'foo)
              (term:surface:brackets
-              _ (term:surface:list:cons
-                 _ (term:surface:id _ 'bar)
-                 (term:surface:list:empty _)))
+              _ (term:surface:group
+                 _ (term:surface:list:cons
+                    _ (term:surface:id _ 'bar)
+                    (term:surface:list:empty _))))
              #f)
             " {zog}more")
   (check-rd rd-text-form "@foo [bar]{zog}more"

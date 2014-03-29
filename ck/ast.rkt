@@ -14,6 +14,7 @@
      [empty]
      [(cons [first term:surface?]
             [rest term:surface:list?])]]
+    [(group [l term:surface:list?])]
     [(swap [t term:surface?])]
     [(parens [t term:surface?])]
     [(braces [t term:surface?])]
