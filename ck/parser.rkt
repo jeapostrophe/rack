@@ -4,7 +4,8 @@
          rack/ck/ast
          rack/ck/reader)
 (module+ test
-  (require rackunit))
+  (require rackunit
+           (for-syntax racket/base)))
 
 (module+ test
   (define (pp v)
@@ -114,15 +115,19 @@
            (term:ast:list:empty l0)
            l))
 
-  (define-syntax-rule (check-en* en i eo)
-    (test-case
-     (format "(~a ~v)" 'en (pp i))
-     (let ()
-       (define ao (en i))
-       (if (equal? ao eo)
-         (check-equal? ao eo)
-         (fail (format "expected ~a, got ~a"
-                       (pp eo) (pp ao))))))))
+  (define-syntax (check-en* stx)
+    (syntax-case stx ()
+      [(_ en i eo)
+       (quasisyntax/loc stx
+         (test-case
+          (format "(~a ~v)" 'en (pp i))
+          (let ()
+            (define ao (en i))
+            (if (equal? ao eo)
+              (check-equal? ao eo)
+              #,(syntax/loc stx
+                  (fail (format "expected ~a, got ~a"
+                                (pp eo) (pp ao))))))))])))
 
 (define (surface-group s)
   (define (surface-until-op l)
@@ -321,19 +326,30 @@
     (term:surface:op l0 (term:surface:id l0 '+))
     (term:surface:id l0 'd))))
 
-(struct prec-state (output operators))
+(struct prec-state (output operators) #:transparent)
 (define (surface-precedence s)
   (define fake-loc (srcloc #f #f #f #f #f))
   (define (E input st)
     (match input
       [(term:surface:list:empty loc)
-       (pop-rators st)]
+       (pop-rators:top st)]
       [(term:surface:list:cons loc f r)
        (if (op? f)
          (E r (push-rator loc f st))
          (E r (push-rand loc f st)))]
       [(term loc)
        (en-error loc (format "prec/E: unexpected term: ~e" s))]))
+  (define (pop-rators:top st)
+    (match st
+      [(prec-state (and output
+                        (or (term:surface:list:empty _)
+                            (term:surface:list:cons
+                             _ (not (? term:surface:list?))
+                             (term:surface:list:empty _))))
+                   (term:surface:list:empty _))
+       output]
+      [_
+       (pop-rators st)]))
   (define (pop-rators st)
     (match st
       [(prec-state (term:surface:list:cons _ f (term:surface:list:empty _))
@@ -443,6 +459,16 @@
 (module+ test
   (define-syntax-rule (check-prec i eo)
     (check-en* surface-precedence i eo))
+
+  (check-prec
+   (term:surface:list)
+   (term:surface:list))
+
+  (check-prec
+   (term:surface:list
+    (term:surface:id l0 'a))
+   (term:surface:list
+    (term:surface:id l0 'a)))
 
   (check-prec
    (term:surface:list
