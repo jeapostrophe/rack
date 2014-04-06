@@ -110,6 +110,8 @@
 (define-char-predicate char-closing-forms? ")]}")
 (define-char-predicate char-not-in-id? "\"([{}])`;,")
 
+;; XXX take out . : and ->?
+
 (define (rd-atom ip)
   (define start (port-location ip))
   (define len
