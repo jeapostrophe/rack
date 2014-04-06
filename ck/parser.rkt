@@ -39,6 +39,8 @@
        s]
       [(term:surface:op _ s)
        (pp s)]
+      [(term:surface:unary-op _ s)
+       (pp s)]
       [(term loc)
        (en-error loc (format "pp: unexpected term: ~e" v))])))
 
@@ -93,6 +95,8 @@
            (not (op? (term:surface:swap-t v))))))
 (define (op-id v)
   (match v
+    [(term:surface:unary-op _ t)
+     (op-id t)]
     [(term:surface:op _ t)
      (op-id t)]
     [(term:surface:swap _ t)
@@ -115,19 +119,31 @@
            (term:ast:list:empty l0)
            l))
 
+  (define (pps x)
+    (format "~a" (pp x)))
+
   (define-syntax (check-en* stx)
     (syntax-case stx ()
-      [(_ en i eo)
+      [(_ en i eoe)
        (quasisyntax/loc stx
          (test-case
           (format "(~a ~v)" 'en (pp i))
           (let ()
+            (define eo eoe)
             (define ao (en i))
-            (if (equal? ao eo)
-              (check-equal? ao eo)
-              #,(syntax/loc stx
-                  (fail (format "expected ~a, got ~a"
-                                (pp eo) (pp ao))))))))])))
+            (cond
+              [(equal? ao eo)
+               (check-equal? ao eo)]
+              [else
+               (define eos (pps eo))
+               (define aos (pps ao))
+               (if (string=? eos aos)
+                 #,(syntax/loc stx
+                     (fail (format "expected ~a, got ~a"
+                                   eo ao)))
+                 #,(syntax/loc stx
+                     (fail (format "expected ~a, got ~a"
+                                   eos aos))))]))))])))
 
 (define (surface-group s)
   (define (surface-until-op l)
@@ -335,10 +351,16 @@
        (pop-rators:top st)]
       [(term:surface:list:cons loc f r)
        (if (op? f)
-         (E r (push-rator loc f st))
+         (E r (push-rator loc (maybe-unary-rator loc f st) st))
          (E r (push-rand loc f st)))]
       [(term loc)
        (en-error loc (format "prec/E: unexpected term: ~e" s))]))
+  (define (maybe-unary-rator loc f st)
+    (match st
+      [(prec-state (term:surface:list:empty _) _)
+       (term:surface:unary-op loc f)]
+      [_
+       f]))
   (define (pop-rators:top st)
     (match st
       [(prec-state (and output
@@ -362,7 +384,7 @@
     (prec-state (term:surface:list:cons loc n rands) rators))
   (define (push-rator loc op st)
     (cond
-      [(op-precedence< op (top-op st))
+      [(op-precedence> (top-op st) op)
        (push-rator loc op (pop-rator st))]
       [else
        (match-define (prec-state rands rators) st)
@@ -406,15 +428,36 @@
        -20]
       [else
        0]))
-  (define (op-precedence< y x)
-    (match* (x y)
-      [(#f _)
+  (define (op-unary? x)
+    ;; xxx actually look at id?
+    (term:surface:unary-op? x))
+  (define (op-binary? x)
+    ;; xxx something else?
+    (not (op-unary? x)))
+  (define (op-left? x)
+    ;; xxx something else?
+    #f)
+  (define (op-precedence> x y)
+    (cond
+      [(and (not x))
        #f]
-      [(_ #f)
-       (error 'op-precedence< "impossible case: ~e ~e\n" y x)]
-      [(_ _)
-       (< (op-precedence y)
-          (op-precedence x))]))
+      [(and (not y))
+       (error 'op-precedence> "impossible case: ~e ~e\n" x y)]
+      [(and (op-binary? x)
+            (op-binary? y))
+       (or (> (op-precedence x)
+              (op-precedence y))
+           (and (op-left? x)
+                (= (op-precedence x)
+                   (op-precedence y))))]
+      [(and (op-unary? x)
+            (op-binary? y))
+       (>= (op-precedence x)
+           (op-precedence y))]
+      [(and (op-unary? y))
+       #f]
+      [else
+       (error 'op-precedence> "unknown case: ~e ~e\n" x y)]))
   (define (pop-rator st)
     (match st
       [(prec-state
@@ -435,18 +478,19 @@
          rands)
         rators)]
       [(prec-state
-        (term:surface:list:cons
-         rand-loc-0 rand0
-         (term:surface:list:empty mt-loc))
+        (and rands
+             (term:surface:list:cons
+              rand-loc-0 rand0
+              (term:surface:list:empty mt-loc)))
         (term:surface:list:cons rator-loc rator rators))
        (prec-state
         (term:surface:list:cons
          rator-loc
          (term:surface:list:cons
           rator-loc rator
-          (term:surface:list:cons
-           rand-loc-0 rand0
-           (term:surface:list:empty mt-loc)))
+          (if (term:surface:list? rand0)
+            rand0
+            rands))
          (term:surface:list:empty mt-loc))
         rators)]
       [(term loc)
@@ -596,7 +640,7 @@
    (term:surface:list
     (term:surface:op l0 (term:surface:id l0 '+))
     (term:surface:list
-     (term:surface:op l0 (term:surface:id l0 '-))
+     (term:surface:unary-op l0 (term:surface:op l0 (term:surface:id l0 '-)))
      (term:surface:num l0 4))
     (term:surface:list
      (term:surface:op l0 (term:surface:id l0 '*))
@@ -611,6 +655,8 @@
     [(term:surface:id loc s)
      (term:ast:id loc s)]
     [(term:surface:op loc s)
+     (en s)]
+    [(term:surface:unary-op loc s)
      (en s)]
     [(term:surface:parens loc s)
      (en s)]
@@ -673,14 +719,55 @@
             (term:ast:id l0 '+))
   (check-en (term:surface:group
              l0 (term:surface:list
+                 (term:surface:num l0 0)
                  (term:surface:op l0 (term:surface:id l0 '+))
                  (term:surface:num l0 1)
                  (term:surface:num l0 2)))
             (term:ast:list
              (term:ast:id l0 '+)
+             (term:ast:num l0 0)
              (term:ast:list
               (term:ast:num l0 1)
               (term:ast:num l0 2))))
+  (check-en (term:surface:group
+             l0 (term:surface:list
+                 (term:surface:num l0 1)
+                 (term:surface:op l0 (term:surface:id l0 '+))
+                 (term:surface:id l0 'foo)
+                 (term:surface:num l0 2)))
+            (term:ast:list
+             (term:ast:id l0 '+)
+             (term:ast:num l0 1)
+             (term:ast:list
+              (term:ast:id l0 'foo)
+              (term:ast:num l0 2))))
+  (check-en (term:surface:group
+             l0 (term:surface:list
+                 (term:surface:op l0 (term:surface:id l0 '+))
+                 (term:surface:num l0 1)
+                 (term:surface:num l0 2)))
+            (term:ast:list
+             (term:ast:id l0 '+)
+             (term:ast:num l0 1)
+             (term:ast:num l0 2)))
+  (check-en (term:surface:group
+             l0 (term:surface:list
+                 (term:surface:op l0 (term:surface:id l0 '+))
+                 (term:surface:id l0 'foo)
+                 (term:surface:num l0 2)))
+            (term:ast:list
+             (term:ast:id l0 '+)
+             (term:ast:id l0 'foo)
+             (term:ast:num l0 2)))
+  (check-en (term:surface:group
+             l0 (term:surface:list
+                 (term:surface:id l0 'foo)
+                 (term:surface:num l0 1)
+                 (term:surface:num l0 2)))
+            (term:ast:list
+             (term:ast:id l0 'foo)
+             (term:ast:num l0 1)
+             (term:ast:num l0 2)))
   (check-en (term:surface:group
              l0 (term:surface:list
                  (term:surface:swap l0 (term:surface:op l0 (term:surface:id l0 '+)))
@@ -737,8 +824,6 @@
   ;; xxx list - mt / cons
   ;; xxx text-form
   )
-
-;; xxx en tests
 
 (define (en-file s)
   (match-define (term:surface-file loc lang c) s)

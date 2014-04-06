@@ -16,6 +16,7 @@
             [rest term:surface:list?])]]
     [(group [l term:surface:list?])]
     [(swap [t term:surface?])]
+    [(unary-op [t term:surface?])]
     [(parens [t term:surface?])]
     [(braces [t term:surface?])]
     [(brackets [t term:surface?])]
