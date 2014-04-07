@@ -1,4 +1,4 @@
-#lang rack/eu
+#lang rack/eu/sexp
 
 (defn:fun:extern (type:atom:int 32) 'putchar (vector (vector 'c (type:atom:int 32))))
 

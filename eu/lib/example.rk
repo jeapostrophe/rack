@@ -1,0 +1,17 @@
+#lang rack/eu
+
+@code[
+ extern int32 @putchar ( int32 %c );
+
+ extern int32 @f () {
+  ext @putchar ( 0x41 );
+ };
+
+ extern int32 @main () {
+   let %A = -35 * -1 * 2 in
+   ext @putchar %A;
+   ext @putchar (let %B = %A + 1 in %B);
+   ext @putchar 0xA;
+   ext @f;
+ };
+]
