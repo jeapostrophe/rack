@@ -1,1 +1,11 @@
 an experimental racket-y language/vm
+
+TOOD:
+- hook up reader/parser to rack/eu
+- add more tests to reader/parser
+- add more forms to rack/eu
+- make rack/et (closures, gc, and continuations)
+- make rack (sealing, interface, transformers everywhere)
+- reprinter from surface syntax
+- std indenter from surface syntax
+- default ()s info from ast

@@ -10,6 +10,8 @@
 (module+ test
   (define (pp v)
     (match v
+      [(prec-state x y)
+       (prec-state (pp x) (pp y))]
       [(term:ast-file _ l c)
        (cons (pp l) (pp c))]
       [(term:ast:str _ s)
@@ -342,6 +344,11 @@
     (term:surface:op l0 (term:surface:id l0 '+))
     (term:surface:id l0 'd))))
 
+(define DEBUG? (make-parameter #f))
+(define (debug . args)
+  (when (DEBUG?)
+    (apply eprintf args)))
+
 (struct prec-state (output operators) #:transparent)
 (define (surface-precedence s)
   (define fake-loc (srcloc #f #f #f #f #f))
@@ -370,6 +377,16 @@
                              (term:surface:list:empty _))))
                    (term:surface:list:empty _))
        output]
+      [(prec-state
+        (term:surface:list:cons
+         rand-loc-0 (and rand0
+                         (? term:surface:list?))
+         (term:surface:list:empty mt-loc))
+        (term:surface:list:cons rator-loc rator
+                                (term:surface:list:empty _)))
+       (term:surface:list:cons
+        rator-loc rator
+        rand0)]
       [_
        (pop-rators st)]))
   (define (pop-rators st)
@@ -378,7 +395,8 @@
                    (term:surface:list:empty _))
        f]
       [_
-       (pop-rators (pop-rator st))]))
+       (define stp (pop-rator st))
+       (pop-rators stp)]))
   (define (push-rand loc n st)
     (match-define (prec-state rands rators) st)
     (prec-state (term:surface:list:cons loc n rands) rators))
@@ -488,9 +506,7 @@
          rator-loc
          (term:surface:list:cons
           rator-loc rator
-          (if (term:surface:list? rand0)
-            rand0
-            rands))
+          rands)
          (term:surface:list:empty mt-loc))
         rators)]
       [(term loc)
@@ -645,7 +661,61 @@
     (term:surface:list
      (term:surface:op l0 (term:surface:id l0 '*))
      (term:surface:num l0 2)
-     (term:surface:num l0 8)))))
+     (term:surface:num l0 8))))
+
+  (check-prec
+   (term:surface:list
+    (term:surface:num l0 1)
+    (term:surface:op l0 (term:surface:id l0 '|;|)))
+   (term:surface:list
+    (term:surface:op l0 (term:surface:id l0 '|;|))
+    (term:surface:num l0 1)))
+
+  (check-prec
+   (term:surface:list
+    (term:surface:num l0 1)
+    (term:surface:op l0 (term:surface:id l0 '|;|))
+    (term:surface:num l0 2))
+   (term:surface:list
+    (term:surface:op l0 (term:surface:id l0 '|;|))
+    (term:surface:num l0 1)
+    (term:surface:num l0 2)))
+
+  (check-prec
+   (term:surface:list
+    (term:surface:num l0 1)
+    (term:surface:op l0 (term:surface:id l0 '|;|))
+    (term:surface:num l0 2)
+    (term:surface:op l0 (term:surface:id l0 '|;|)))
+   (term:surface:list
+    (term:surface:op l0 (term:surface:id l0 '|;|))
+    (term:surface:list
+     (term:surface:op l0 (term:surface:id l0 '|;|))
+     (term:surface:num l0 1)
+     (term:surface:num l0 2))))
+
+  (check-prec
+   (term:surface:list
+    (term:surface:num l0 1)
+    (term:surface:op l0 (term:surface:id l0 '|;|))
+    (term:surface:num l0 2)
+    (term:surface:op l0 (term:surface:id l0 '|;|))
+    (term:surface:num l0 3)
+    (term:surface:op l0 (term:surface:id l0 '|;|))
+    (term:surface:num l0 4)
+    (term:surface:op l0 (term:surface:id l0 '|;|)))
+   (term:surface:list
+    (term:surface:op l0 (term:surface:id l0 '|;|))
+    (term:surface:list
+     (term:surface:op l0 (term:surface:id l0 '|;|))
+     (term:surface:num l0 1)
+     (term:surface:list
+      (term:surface:op l0 (term:surface:id l0 '|;|))
+      (term:surface:num l0 2)
+      (term:surface:list
+       (term:surface:op l0 (term:surface:id l0 '|;|))
+       (term:surface:num l0 3)
+       (term:surface:num l0 4)))))))
 
 ;; (en)forest : surface -> ast
 (define (en s)

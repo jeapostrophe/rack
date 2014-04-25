@@ -8,9 +8,9 @@
  };
 
  extern int32 @main () {
-   let %A = -35 * -1 * 2 in
+   let [%A = -35 * -1 * 2] in
    ext @putchar %A;
-   ext @putchar (let %B = %A + 1 in %B);
+   ext @putchar (let [%B = %A + 1] in %B);
    ext @putchar 0xA;
    ext @f;
  };
