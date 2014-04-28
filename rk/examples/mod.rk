@@ -1,0 +1,31 @@
+#lang racket
+
+(define (f x)
+  (+ 1 x))
+(begin-for-syntax
+  (define (g y)
+    (+ 2 y)))
+(define-syntax (h stx)
+  (quasisyntax
+    (f (unsyntax (g (cadr (syntax->datum stx)))))))
+(h 3)
+
+;; ---
+
+(module f racket
+  (λ (x)
+    (+ 1 x)))
+(module g racket
+  (λ (y)
+    (+ 2 y)))
+(module h racket
+  (runtime-link g)
+  (lambda (stx)
+    (quasisyntax
+      ((unsyntax (context-stamp stx f))
+       (unsyntax (g (cadr (syntax->datum stx))))))))
+(rename t2.f i)
+(module #f racket
+  (runtime-link f)
+  (transformer-link h)
+  (h 3))
