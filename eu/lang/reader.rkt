@@ -1,6 +1,6 @@
 (module reader syntax/module-reader
-  #:read ...
-  #:read-syntax ...
+  #:read ck-read
+  #:read-syntax ck-read-syntax
   #:whole-body-readers? #t
   #:language 'rack/eu/lang
   (require rack/ck/parser))

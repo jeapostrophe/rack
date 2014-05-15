@@ -122,7 +122,8 @@
     [_
      (error 'type-expr "can't check ~e" e)]))
 
-;; xxx sizeof - http://stackoverflow.com/questions/14608250/how-can-i-find-the-size-of-a-type
+;; xxx sizeof -
+;; http://stackoverflow.com/questions/14608250/how-can-i-find-the-size-of-a-type
 
 ;; xxx memoize
 (define (type->llvm-type t)

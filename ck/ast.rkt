@@ -28,7 +28,12 @@
     [(str [s string?])]
     [(id [s symbol?])]
     ;; xxx be more specific
-    [(num [n number?])]]
+    [num
+     [(int [n number?]
+           [sign-stx (or/c #f '+ '-)]
+           [size-act number?]
+           [size-stx (or/c #f number?)]
+           [base (or/c #f 2 8 10 16 'unicode)])]]]
 
    [(ast-file
      [lang term:ast:str?]
@@ -42,4 +47,6 @@
     [(str [s string?])]
     [(id [s symbol?])]
     ;; xxx be more specific
-    [(num [n number?])]]])
+    [num
+     [(int [n number?]
+           [size number?])]]]])

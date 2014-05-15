@@ -1,5 +1,6 @@
 #lang racket/base
 (require racket/match
+         racket/contract/base
          unstable/match
          rack/ck/ast
          rack/ck/reader)
@@ -18,19 +19,28 @@
        s]
       [(term:ast:id _ s)
        s]
-      [(term:ast:num _ s)
+      [(term:ast:num:int _ s _)
        s]
       [(term:ast:list:empty _)
        null]
       [(term:ast:list:cons _ f r)
        (cons (pp f) (pp r))]
       ;; surface
+      [#f #f]
+      [(term:surface:text _ s)
+       (vector '#%text (pp s))]
+      [(term:surface:brackets _ s)
+       (vector '#%brackets (pp s))]
+      [(term:surface:parens _ s)
+       (vector '#%parens (pp s))]
+      [(term:surface:text-form _ c d b)
+       (vector '#%text-form (pp c) (pp d) (pp b))]
       [(term:surface:str _ s)
        s]
-      [(term:surface:num _ s)
+      [(term:surface:num:int _ s _ _ _ _)
        s]
       [(term:surface:group _ s)
-       (pp s)]
+       (vector '#%group (pp s))]
       [(term:surface:swap _ s)
        (pp s)]
       [(term:surface:list:empty _)
@@ -121,6 +131,34 @@
            (term:ast:list:empty l0)
            l))
 
+  (define drop-srcloc
+    (match-lambda
+     [(term:ast:str _ s)
+      (term:ast:str l0 s)]
+     [(term:ast:id _ s)
+      (term:ast:id l0 s)]
+     [(term:ast:num:int _ s sz)
+      (term:ast:num:int l0 s sz)]
+     [(term:ast:list:empty _)
+      (term:ast:list:empty l0)]
+     [(term:ast:list:cons _ a d)
+      (term:ast:list:cons l0 (drop-srcloc a) (drop-srcloc d))]
+     ;; surface
+     [(term:surface:id _ s)
+      (term:surface:id l0 s)]
+     [(term:surface:num:int _ n sgs sza szs b)
+      (term:surface:num:int l0 n sgs sza szs b)]
+     [(term:surface:op _ s)
+      (term:surface:op l0 (drop-srcloc s))]
+     [(term:surface:unary-op _ s)
+      (term:surface:unary-op l0 (drop-srcloc s))]
+     [(term:surface:swap _ s)
+      (term:surface:swap l0 (drop-srcloc s))]
+     [(term:surface:list:empty _)
+      (term:surface:list:empty l0)]
+     [(term:surface:list:cons _ a d)
+      (term:surface:list:cons l0 (drop-srcloc a) (drop-srcloc d))]))
+
   (define (pps x)
     (format "~a" (pp x)))
 
@@ -131,8 +169,8 @@
          (test-case
           (format "(~a ~v)" 'en (pp i))
           (let ()
-            (define eo eoe)
-            (define ao (en i))
+            (define eo (drop-srcloc eoe))
+            (define ao (drop-srcloc (en i)))
             (cond
               [(equal? ao eo)
                (check-equal? ao eo)]
@@ -141,10 +179,10 @@
                (define aos (pps ao))
                (if (string=? eos aos)
                  #,(syntax/loc stx
-                     (fail (format "expected ~a, got ~a"
+                     (fail (format "[pp  eq] expected ~a, got ~a"
                                    eo ao)))
                  #,(syntax/loc stx
-                     (fail (format "expected ~a, got ~a"
+                     (fail (format "[pp neq] expected ~a, got ~a"
                                    eos aos))))]))))])))
 
 (define (surface-group s)
@@ -342,7 +380,18 @@
     (term:surface:op l0 (term:surface:id l0 '+))
     (term:surface:id l0 'c)
     (term:surface:op l0 (term:surface:id l0 '+))
-    (term:surface:id l0 'd))))
+    (term:surface:id l0 'd)))
+
+  (check-group
+   (term:surface:list
+    (term:surface:id l0 'i)
+    (term:surface:id l0 'width)
+    (term:surface:op l0 (term:surface:id l0 '|;|)))
+   (term:surface:list
+    (term:surface:list
+     (term:surface:id l0 'i)
+     (term:surface:id l0 'width))
+    (term:surface:op l0 (term:surface:id l0 '|;|)))))
 
 (define DEBUG? (make-parameter #f))
 (define (debug . args)
@@ -370,20 +419,20 @@
        f]))
   (define (pop-rators:top st)
     (match st
-      [(prec-state (and output
-                        (or (term:surface:list:empty _)
-                            (term:surface:list:cons
-                             _ (not (? term:surface:list?))
-                             (term:surface:list:empty _))))
+      [(prec-state (or (and output (term:surface:list:empty _))
+                       (term:surface:list:cons
+                        _ (and output (not (? term:surface:list?)))
+                        (term:surface:list:empty _)))
                    (term:surface:list:empty _))
        output]
-      [(prec-state
-        (term:surface:list:cons
-         rand-loc-0 (and rand0
-                         (? term:surface:list?))
-         (term:surface:list:empty mt-loc))
-        (term:surface:list:cons rator-loc rator
-                                (term:surface:list:empty _)))
+      [(and #f
+            (prec-state
+             (term:surface:list:cons
+              rand-loc-0 (and rand0
+                              (? term:surface:list?))
+              (term:surface:list:empty mt-loc))
+             (term:surface:list:cons rator-loc rator
+                                     (term:surface:list:empty _))))
        (term:surface:list:cons
         rator-loc rator
         rand0)]
@@ -527,8 +576,19 @@
   (check-prec
    (term:surface:list
     (term:surface:id l0 'a))
+   (term:surface:id l0 'a))
+
+  (check-prec
    (term:surface:list
-    (term:surface:id l0 'a)))
+    (term:surface:list
+     (term:surface:id l0 'i)
+     (term:surface:id l0 'width))
+    (term:surface:op l0 (term:surface:id l0 '|;|)))
+   (term:surface:list
+    (term:surface:op l0 (term:surface:id l0 '|;|))
+    (term:surface:list
+     (term:surface:id l0 'i)
+     (term:surface:id l0 'width))))
 
   (check-prec
    (term:surface:list
@@ -579,21 +639,21 @@
    (term:surface:list
     (term:surface:id l0 'i)
     (term:surface:op l0 (term:surface:id l0 '>))
-    (term:surface:num l0 20)
+    (term:surface:num:int l0 20 #f 32 #f #f)
     (term:surface:op l0 (term:surface:id l0 '&&))
     (term:surface:id l0 'i)
     (term:surface:op l0 (term:surface:id l0 '<))
-    (term:surface:num l0 50)
+    (term:surface:num:int l0 50 #f 32 #f #f)
     (term:surface:op l0 (term:surface:id l0 (string->symbol "||")))
     (term:surface:id l0 'i)
     (term:surface:op l0 (term:surface:id l0 '>))
-    (term:surface:num l0 100)
+    (term:surface:num:int l0 100 #f 32 #f #f)
     (term:surface:op l0 (term:surface:id l0 '&&))
     (term:surface:id l0 'i)
     (term:surface:op l0 (term:surface:id l0 '<))
     (term:surface:id l0 'width)
     (term:surface:op l0 (term:surface:id l0 '-))
-    (term:surface:num l0 20))
+    (term:surface:num:int l0 20 #f 32 #f #f))
    (term:surface:list
     (term:surface:op l0 (term:surface:id l0 (string->symbol "||")))
     (term:surface:list
@@ -601,121 +661,126 @@
      (term:surface:list
       (term:surface:op l0 (term:surface:id l0 '>))
       (term:surface:id l0 'i)
-      (term:surface:num l0 20))
+      (term:surface:num:int l0 20 #f 32 #f #f))
      (term:surface:list
       (term:surface:op l0 (term:surface:id l0 '<))
       (term:surface:id l0 'i)
-      (term:surface:num l0 50)))
+      (term:surface:num:int l0 50 #f 32 #f #f)))
     (term:surface:list
      (term:surface:op l0 (term:surface:id l0 '&&))
      (term:surface:list
       (term:surface:op l0 (term:surface:id l0 '>))
       (term:surface:id l0 'i)
-      (term:surface:num l0 100))
+      (term:surface:num:int l0 100 #f 32 #f #f))
      (term:surface:list
       (term:surface:op l0 (term:surface:id l0 '<))
       (term:surface:id l0 'i)
       (term:surface:list
        (term:surface:op l0 (term:surface:id l0 '-))
        (term:surface:id l0 'width)
-       (term:surface:num l0 20))))))
+       (term:surface:num:int l0 20 #f 32 #f #f))))))
 
   (check-prec
    (term:surface:list
-    (term:surface:num l0 4)
+    (term:surface:num:int l0 4 #f 32 #f #f)
     (term:surface:op l0 (term:surface:id l0 '+))
-    (term:surface:num l0 2)
+    (term:surface:num:int l0 2 #f 32 #f #f)
     (term:surface:op l0 (term:surface:id l0 '*))
-    (term:surface:num l0 8)
+    (term:surface:num:int l0 8 #f 32 #f #f)
     (term:surface:op l0 (term:surface:id l0 '|,|))
-    (term:surface:num l0 52)
+    (term:surface:num:int l0 52 #f 32 #f #f)
     (term:surface:op l0 (term:surface:id l0 '-))
-    (term:surface:num l0 2))
+    (term:surface:num:int l0 2 #f 32 #f #f))
    (term:surface:list
     (term:surface:op l0 (term:surface:id l0 '|,|))
     (term:surface:list
      (term:surface:op l0 (term:surface:id l0 '+))
-     (term:surface:num l0 4)
+     (term:surface:num:int l0 4 #f 32 #f #f)
      (term:surface:list
       (term:surface:op l0 (term:surface:id l0 '*))
-      (term:surface:num l0 2)
-      (term:surface:num l0 8)))
+      (term:surface:num:int l0 2 #f 32 #f #f)
+      (term:surface:num:int l0 8 #f 32 #f #f)))
     (term:surface:list
      (term:surface:op l0 (term:surface:id l0 '-))
-     (term:surface:num l0 52)
-     (term:surface:num l0 2))))
+     (term:surface:num:int l0 52 #f 32 #f #f)
+     (term:surface:num:int l0 2 #f 32 #f #f))))
 
   (check-prec
    (term:surface:list
     (term:surface:op l0 (term:surface:id l0 '-))
-    (term:surface:num l0 4)
+    (term:surface:num:int l0 4 #f 32 #f #f)
     (term:surface:op l0 (term:surface:id l0 '+))
-    (term:surface:num l0 2)
+    (term:surface:num:int l0 2 #f 32 #f #f)
     (term:surface:op l0 (term:surface:id l0 '*))
-    (term:surface:num l0 8))
+    (term:surface:num:int l0 8 #f 32 #f #f))
    (term:surface:list
     (term:surface:op l0 (term:surface:id l0 '+))
     (term:surface:list
      (term:surface:unary-op l0 (term:surface:op l0 (term:surface:id l0 '-)))
-     (term:surface:num l0 4))
+     (term:surface:num:int l0 4 #f 32 #f #f))
     (term:surface:list
      (term:surface:op l0 (term:surface:id l0 '*))
-     (term:surface:num l0 2)
-     (term:surface:num l0 8))))
+     (term:surface:num:int l0 2 #f 32 #f #f)
+     (term:surface:num:int l0 8 #f 32 #f #f))))
 
   (check-prec
    (term:surface:list
-    (term:surface:num l0 1)
+    (term:surface:num:int l0 1 #f 32 #f #f)
     (term:surface:op l0 (term:surface:id l0 '|;|)))
    (term:surface:list
     (term:surface:op l0 (term:surface:id l0 '|;|))
-    (term:surface:num l0 1)))
+    (term:surface:num:int l0 1 #f 32 #f #f)))
 
   (check-prec
    (term:surface:list
-    (term:surface:num l0 1)
+    (term:surface:num:int l0 1 #f 32 #f #f)
     (term:surface:op l0 (term:surface:id l0 '|;|))
-    (term:surface:num l0 2))
+    (term:surface:num:int l0 2 #f 32 #f #f))
    (term:surface:list
     (term:surface:op l0 (term:surface:id l0 '|;|))
-    (term:surface:num l0 1)
-    (term:surface:num l0 2)))
+    (term:surface:num:int l0 1 #f 32 #f #f)
+    (term:surface:num:int l0 2 #f 32 #f #f)))
 
   (check-prec
    (term:surface:list
-    (term:surface:num l0 1)
+    (term:surface:num:int l0 1 #f 32 #f #f)
     (term:surface:op l0 (term:surface:id l0 '|;|))
-    (term:surface:num l0 2)
-    (term:surface:op l0 (term:surface:id l0 '|;|)))
-   (term:surface:list
-    (term:surface:op l0 (term:surface:id l0 '|;|))
-    (term:surface:list
-     (term:surface:op l0 (term:surface:id l0 '|;|))
-     (term:surface:num l0 1)
-     (term:surface:num l0 2))))
-
-  (check-prec
-   (term:surface:list
-    (term:surface:num l0 1)
-    (term:surface:op l0 (term:surface:id l0 '|;|))
-    (term:surface:num l0 2)
-    (term:surface:op l0 (term:surface:id l0 '|;|))
-    (term:surface:num l0 3)
-    (term:surface:op l0 (term:surface:id l0 '|;|))
-    (term:surface:num l0 4)
+    (term:surface:num:int l0 2 #f 32 #f #f)
     (term:surface:op l0 (term:surface:id l0 '|;|)))
    (term:surface:list
     (term:surface:op l0 (term:surface:id l0 '|;|))
     (term:surface:list
      (term:surface:op l0 (term:surface:id l0 '|;|))
-     (term:surface:num l0 1)
+     (term:surface:num:int l0 1 #f 32 #f #f)
+     (term:surface:num:int l0 2 #f 32 #f #f))))
+
+  (check-prec
+   (term:surface:list
+    (term:surface:num:int l0 1 #f 32 #f #f)
+    (term:surface:op l0 (term:surface:id l0 '|;|))
+    (term:surface:num:int l0 2 #f 32 #f #f)
+    (term:surface:op l0 (term:surface:id l0 '|;|))
+    (term:surface:num:int l0 3 #f 32 #f #f)
+    (term:surface:op l0 (term:surface:id l0 '|;|))
+    (term:surface:num:int l0 4 #f 32 #f #f)
+    (term:surface:op l0 (term:surface:id l0 '|;|)))
+   (term:surface:list
+    (term:surface:op l0 (term:surface:id l0 '|;|))
+    (term:surface:list
+     (term:surface:op l0 (term:surface:id l0 '|;|))
+     (term:surface:num:int l0 1 #f 32 #f #f)
      (term:surface:list
       (term:surface:op l0 (term:surface:id l0 '|;|))
-      (term:surface:num l0 2)
+      (term:surface:num:int l0 2 #f 32 #f #f)
       (term:surface:list
        (term:surface:op l0 (term:surface:id l0 '|;|))
-       (term:surface:num l0 3)
-       (term:surface:num l0 4)))))))
+       (term:surface:num:int l0 3 #f 32 #f #f)
+       (term:surface:num:int l0 4 #f 32 #f #f)))))))
+
+(define (force-list t)
+  (if (term:ast:list? t)
+    t
+    (term:ast:list:cons (term-src t) t (term:ast:list:empty (term-src t)))))
 
 ;; (en)forest : surface -> ast
 (define (en s)
@@ -744,8 +809,8 @@
       loc
       (term:ast:id loc '#%brackets)
       (en s))]
-    [(term:surface:num loc s)
-     (term:ast:num loc s)]
+    [(term:surface:num:int loc s _ size _ _)
+     (term:ast:num:int loc s size)]
     [(term:surface:text loc l)
      (str-merge (en l))]
     [(term:surface:list:empty loc)
@@ -768,7 +833,9 @@
          (or (as ([body skip]) #f)
              (term:surface:braces _ body)))
         (define inner
-          (term:ast:list-append (en datums) (en body)))
+          (term:ast:list-append 
+           (force-list (en datums)) 
+           (force-list (en body))))
         (if cmd
           (term:ast:list:cons loc (en cmd) inner)
           inner)])]
@@ -782,110 +849,112 @@
             (term:ast:str l0 "test"))
   (check-en (term:surface:id l0 'test)
             (term:ast:id l0 'test))
-  (check-en (term:surface:num l0 20)
-            (term:ast:num l0 20))
+  (check-en (term:surface:num:int l0 20 #f 32 #f #f)
+            (term:ast:num:int l0 20 32))
   (check-en (term:surface:op
              l0 (term:surface:id l0 '+))
             (term:ast:id l0 '+))
   (check-en (term:surface:group
              l0 (term:surface:list
-                 (term:surface:num l0 0)
+                 (term:surface:num:int l0 0 #f 32 #f #f)
                  (term:surface:op l0 (term:surface:id l0 '+))
-                 (term:surface:num l0 1)
-                 (term:surface:num l0 2)))
+                 (term:surface:num:int l0 1 #f 32 #f #f)
+                 (term:surface:num:int l0 2 #f 32 #f #f)))
             (term:ast:list
              (term:ast:id l0 '+)
-             (term:ast:num l0 0)
+             (term:ast:num:int l0 0 32)
              (term:ast:list
-              (term:ast:num l0 1)
-              (term:ast:num l0 2))))
+              (term:ast:num:int l0 1 32)
+              (term:ast:num:int l0 2 32))))
   (check-en (term:surface:group
              l0 (term:surface:list
-                 (term:surface:num l0 1)
+                 (term:surface:num:int l0 1 #f 32 #f #f)
                  (term:surface:op l0 (term:surface:id l0 '+))
                  (term:surface:id l0 'foo)
-                 (term:surface:num l0 2)))
+                 (term:surface:num:int l0 2 #f 32 #f #f)))
             (term:ast:list
              (term:ast:id l0 '+)
-             (term:ast:num l0 1)
+             (term:ast:num:int l0 1 32)
              (term:ast:list
               (term:ast:id l0 'foo)
-              (term:ast:num l0 2))))
+              (term:ast:num:int l0 2 32))))
   (check-en (term:surface:group
              l0 (term:surface:list
                  (term:surface:op l0 (term:surface:id l0 '+))
-                 (term:surface:num l0 1)
-                 (term:surface:num l0 2)))
+                 (term:surface:num:int l0 1 #f 32 #f #f)
+                 (term:surface:num:int l0 2 #f 32 #f #f)))
             (term:ast:list
              (term:ast:id l0 '+)
-             (term:ast:num l0 1)
-             (term:ast:num l0 2)))
+             (term:ast:list
+              (term:ast:num:int l0 1 32)
+              (term:ast:num:int l0 2 32))))
   (check-en (term:surface:group
              l0 (term:surface:list
                  (term:surface:op l0 (term:surface:id l0 '+))
                  (term:surface:id l0 'foo)
-                 (term:surface:num l0 2)))
+                 (term:surface:num:int l0 2 #f 32 #f #f)))
             (term:ast:list
              (term:ast:id l0 '+)
-             (term:ast:id l0 'foo)
-             (term:ast:num l0 2)))
+             (term:ast:list
+              (term:ast:id l0 'foo)
+              (term:ast:num:int l0 2 32))))
   (check-en (term:surface:group
              l0 (term:surface:list
                  (term:surface:id l0 'foo)
-                 (term:surface:num l0 1)
-                 (term:surface:num l0 2)))
+                 (term:surface:num:int l0 1 #f 32 #f #f)
+                 (term:surface:num:int l0 2 #f 32 #f #f)))
             (term:ast:list
              (term:ast:id l0 'foo)
-             (term:ast:num l0 1)
-             (term:ast:num l0 2)))
+             (term:ast:num:int l0 1 32)
+             (term:ast:num:int l0 2 32)))
   (check-en (term:surface:group
              l0 (term:surface:list
                  (term:surface:swap l0 (term:surface:op l0 (term:surface:id l0 '+)))
-                 (term:surface:num l0 1)
-                 (term:surface:num l0 2)))
+                 (term:surface:num:int l0 1 #f 32 #f #f)
+                 (term:surface:num:int l0 2 #f 32 #f #f)))
             (term:ast:list
              (term:ast:id l0 '+)
-             (term:ast:num l0 1)
-             (term:ast:num l0 2)))
+             (term:ast:num:int l0 1 32)
+             (term:ast:num:int l0 2 32)))
   (check-en (term:surface:group
              l0 (term:surface:list
-                 (term:surface:num l0 1)
+                 (term:surface:num:int l0 1 #f 32 #f #f)
                  (term:surface:op l0 (term:surface:id l0 '+))
-                 (term:surface:num l0 2)))
+                 (term:surface:num:int l0 2 #f 32 #f #f)))
             (term:ast:list
              (term:ast:id l0 '+)
-             (term:ast:num l0 1)
-             (term:ast:num l0 2)))
+             (term:ast:num:int l0 1 32)
+             (term:ast:num:int l0 2 32)))
 
   (check-en (term:surface:group
              l0 (term:surface:list
                  (term:surface:id l0 'f)
-                 (term:surface:num l0 1)
+                 (term:surface:num:int l0 1 #f 32 #f #f)
                  (term:surface:op l0 (term:surface:id l0 '+))
-                 (term:surface:num l0 2)))
+                 (term:surface:num:int l0 2 #f 32 #f #f)))
             (term:ast:list
              (term:ast:id l0 '+)
              (term:ast:list
               (term:ast:id l0 'f)
-              (term:ast:num l0 1))
-             (term:ast:num l0 2)))
+              (term:ast:num:int l0 1 32))
+             (term:ast:num:int l0 2 32)))
   (check-en (term:surface:group
              l0 (term:surface:list
                  (term:surface:id l0 'f)
-                 (term:surface:num l0 1)
+                 (term:surface:num:int l0 1 #f 32 #f #f)
                  (term:surface:op l0 (term:surface:id l0 '+))
-                 (term:surface:num l0 2)
+                 (term:surface:num:int l0 2 #f 32 #f #f)
                  (term:surface:op l0 (term:surface:id l0 '*))
-                 (term:surface:num l0 3)))
+                 (term:surface:num:int l0 3 #f 32 #f #f)))
             (term:ast:list
              (term:ast:id l0 '+)
              (term:ast:list
               (term:ast:id l0 'f)
-              (term:ast:num l0 1))
+              (term:ast:num:int l0 1 32))
              (term:ast:list
               (term:ast:id l0 '*)
-              (term:ast:num l0 2)
-              (term:ast:num l0 3))))
+              (term:ast:num:int l0 2 32)
+              (term:ast:num:int l0 3 32))))
   ;; xxx parens
   ;; xxx swap
   ;; xxx braces
@@ -893,7 +962,16 @@
   ;; xxx text
   ;; xxx list - mt / cons
   ;; xxx text-form
-  )
+
+  (check-en (rd-body (open-input-string "@code[ext putchar ( 0x41 );]"))
+            (term:ast:list
+             (term:ast:list
+              (term:ast:id l0 'code)
+              (term:ast:id l0 '|;|)
+              (term:ast:list
+               (term:ast:id l0 'ext)
+               (term:ast:id l0 'putchar)
+               (term:ast:num:int l0 65 32))))))
 
 (define (en-file s)
   (match-define (term:surface-file loc lang c) s)
@@ -915,3 +993,43 @@
   (pretty-write
    (pp
     (en-file (rd-file fip)))))
+
+(define (ck-read ip)
+  (syntax->datum (ck-read-syntax #f ip)))
+
+;; xxx ck-read
+
+(define (srcloc->stx src)
+  (datum->syntax #f #f (cdr (vector->list (struct->vector src)))))
+
+;; xxx srcloc->stx
+
+(define (ast->stx t)
+  (match t
+    [(or (term:ast:id src i)
+         (term:ast:str src i)
+         ;; xxx ignore size
+         (term:ast:num:int src i _)
+         (as ([i '()])
+             (term:ast:list:empty src)))
+     (datum->syntax #f i (srcloc->stx src))]
+    [(term:ast:list:cons src a d)
+     (quasisyntax/loc (srcloc->stx src)
+       (#,(ast->stx a) . #,(ast->stx d)))]))
+
+;; xxx ast->stx
+
+(define (ck-read-syntax name ip)
+  (port-count-lines! ip)
+  (ast->stx (en (rd-body ip))))
+
+;; xxx ck-read-syntax
+
+(provide
+ (contract-out
+  [ck-read
+   (-> input-port?
+       any/c)]
+  [ck-read-syntax
+   (-> any/c input-port?
+       any/c)]))

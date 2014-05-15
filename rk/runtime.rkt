@@ -1,62 +1,49 @@
 #lang racket/base
-(require ffi/vector)
-(module+ test
-  (require rackunit))
+(require ffi/base)
 
+(struct obj (pointers atomics))
 (define (make-object pointer-count atomic-size)
-  (define v (make-vector (add1 pointer-count) #f))
-  (vector-set! v pointer-count (make-u32vector atomic-size))
-  v)
-(define (object-ptr-ref o i)
-  (vector-ref o i))
-(define (object-atomic-ref o i)
-  (u32uvector-ref (vector-ref o (sub1 (vector-length o))) i))
+  (obj (make-vector pointer-count) (malloc atomic-size)))
+(define (object-ref-ptr o i)
+  (vector-ref (obj-pointers obj) i))
+(define (object-ref-atomics o)
+  (obj-atomics obj))
 
-(require (for-syntax racket/base
-                     racket/list
-                     syntax/parse))
-(begin-for-syntax
-  (struct static-layout (pointers atomics) #:prefab))
-(define-syntax mt#rep
-  (static-layout empty empty))
-(define-syntax (define-layout stx)
-  (syntax-parse stx
-    [(_ struct:id parent:id (pfield:id ...) (afield:id ...))
-     (let ()
-       (match-define 
-        (static-layout parent-ptrs parent-atoms)
-        (syntax-local-value #'parent))
-       (define struct-layout 
-         (static-layout (append parent-ptrs
-                                (list #'pfield ...))
-                        (append parent-atoms
-                                (list #'afield ...))))
-       (syntax/loc stx
-         (begin
-           (define-syntax struct#rep
-             #,struct-layout)
-           (define (struct.pfield= o v)
-             (object-ptr-set! o pfieldi v))
-           ...
-           (define (struct.pfield o)
-             (object-ptr-ref o pfieldi))
-           ...
-           (define (new.struct field ...)
-             (define o
-               (make-object
-                ,#(length (static-layout-points struct-layout))
-                atomic-size))
-             (o . struct.field= . field)
-             ...
-             o))))]))
+(define (make-seal int->imp)
+  (define s (gensym))
+  (define (seal? x)
+    (equal? s (object-ref-ptr x 0)))
+  (define (seal x)
+    (define o (make-object 2 0))
+    (object-set-ptr! o 0 s)
+    (object-set-ptr! o 1 x)
+    o)
+  (define (unseal x)
+    (object-ref-ptr o 1))
+  (values seal? seal unseal))
 
+(define (make-interface funs)
+  (make-vector funs))
 (module+ test
-  (define-layout IntCons mt#rep
-    [first _int32]
-    [rest _racket])
-  (define c0 (IntCons 4 #f))
-  (check-equal? (IntCons.first c0) 4)
-  (check-equal? (IntCons.rest c0) #f)
-  (define c1 (IntCons 5 c0))
-  (check-equal? (IntCons.first c1) 5)
-  (check-equal? (IntCons.rest c1) c0))
+  (define queue^
+    (make-interface '(cons snoc head tail)))
+
+  (define (fwd-queue@:cons x l)
+    (cons x l))
+  (define (fwd-queue@:head l)
+    (first l))
+  (define (fwd-queue@:snoc l x)
+    (append l (list x)))
+  (define (fwd-queue@:tail l)
+    (last l))
+  (define fwd-queue@
+    (vector fwd-queue@:cons fwd-queue@:snoc
+            fwd-queue@:head fwd-queue@:tail))
+  
+  (define bkw-queue@:snoc fwd-queue@:cons)
+  (define bkw-queue@:cons fwd-queue@:snoc)
+  (define bkw-queue@:tail fwd-queue@:head)
+  (define bkw-queue@:head fwd-queue@:tail)
+  (define bkw-queue@
+    (vector bkw-queue@:cons bkw-queue@:snoc
+            bkw-queue@:head bkw-queue@:tail)))

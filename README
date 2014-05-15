@@ -9,3 +9,20 @@ TOOD:
 - reprinter from surface syntax
 - std indenter from surface syntax
 - default ()s info from ast
+
+IDEA:
+- macros are a defined API on an AST/frontend
+- this makes writing front-ends easier
+- how to make analysis easier?
+- standard interpretations...
+-- compile : prog -> machine-prog -> val
+-- interp : prog -> val
+-- small-step : prog -> prog
+-- big-step : prog -> derivation
+-- machine-inject : prog -> machine
+-- machine-step : machine -> machine
+-- machine-extract : machine -> prog
+- parameterize these in a way to make it "cheap" to write a new analysis
+
+READING
+- http://www.ravenbrook.com/project/mps

@@ -1,16 +1,19 @@
 #lang racket/base
 (require rack/eu/ast
          rack/eu/main
+         racket/list
          (for-syntax racket/base
+                     racket/pretty
                      syntax/parse))
 
 (define-syntax (module-begin stx)
   (syntax-parse stx
     [(_ d ...)
+     (pretty-print (syntax->datum #'(d ...)))
      (syntax/loc stx
        (#%module-begin 
         (define src
-          (prog (list d ...)))
+          (prog (flatten (list d ...))))
         (verify src)
         (define mod
           (compile src))

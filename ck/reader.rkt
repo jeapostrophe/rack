@@ -151,14 +151,30 @@
        [(regexp-match #rx"^([+-])?([0-9]+)(i(1|8|16|32|64))?$" s)
         => (match-lambda
             [(list _ maybe-sign number-str _ maybe-size)
-             ;; xxx sign and size
-             (term:surface:num src (string->number number-str))])]
+             (define maybe-size-n
+               (and maybe-size (string->number maybe-size)))
+             (term:surface:num:int 
+              src (string->number (string-append (or maybe-sign "") number-str))
+              (and maybe-sign (string->symbol maybe-sign))
+              (or maybe-size-n 32)
+              maybe-size-n
+              #f)])]
+       [(regexp-match #rx"^0x([0-9A-Fa-f]+)(i(1|8|16|32|64))?$" s)
+        => (match-lambda
+            [(list _ number-str _ maybe-size)
+             (define maybe-size-n
+               (and maybe-size (string->number maybe-size)))
+             (term:surface:num:int 
+              src (string->number number-str 16)
+              #f
+              (or maybe-size-n 32)
+              maybe-size-n
+              16)])]
        [#f ;; xxx
         #rx"^([+-])?([0-9]+\\.[0-9]+|nan\\.0|inf\\.0)(f(16|32|64|80|128))?$"
         #rx"^0b([0-1]+)(i(1|8|16|32|64))?$"
         #rx"^0o([0-7]+)(i(1|8|16|32|64))?$"
         #rx"^0d([0-9]+)(i(1|8|16|32|64))?$"
-        #rx"^0x([0-9A-Fa-f]+)(i(1|8|16|32|64))?$"
         ;; xxx read single unicode character as a number
         #rx"^0u(.)(i(1|8|16|32|64))?$"]
        ;; An operator contains no numbers or alphabetic characters
@@ -176,9 +192,24 @@
 (module+ test
   (check-rd rd-atom ";" (term:surface:op _ (term:surface:id _ '|;|)) "")
   (check-rd rd-atom "," (term:surface:op _ (term:surface:id _ '|,|)) "")
-  ;; xxx sign and size
-  (check-rd rd-atom "42" (term:surface:num _ 42) "")
-  (check-rd rd-atom "+42" (term:surface:num _ 42) "")
+  (check-rd rd-atom "-42" (term:surface:num:int _ -42 '- 32 #f #f) "")
+  (check-rd rd-atom  "42" (term:surface:num:int _  42 #f 32 #f #f) "")
+  (check-rd rd-atom "+42" (term:surface:num:int _  42 '+ 32 #f #f) "")
+  (check-rd rd-atom "-42i32" (term:surface:num:int _ -42 '- 32 32 #f) "")
+  (check-rd rd-atom  "42i32" (term:surface:num:int _  42 #f 32 32 #f) "")
+  (check-rd rd-atom "+42i32" (term:surface:num:int _  42 '+ 32 32 #f) "")
+  (check-rd rd-atom "-42i1" (term:surface:num:int _ -42 '- 1 1 #f) "")
+  (check-rd rd-atom  "42i1" (term:surface:num:int _  42 #f 1 1 #f) "")
+  (check-rd rd-atom "+42i1" (term:surface:num:int _  42 '+ 1 1 #f) "")
+  (check-rd rd-atom "-42i8" (term:surface:num:int _ -42 '- 8 8 #f) "")
+  (check-rd rd-atom  "42i8" (term:surface:num:int _  42 #f 8 8 #f) "")
+  (check-rd rd-atom "+42i8" (term:surface:num:int _  42 '+ 8 8 #f) "")
+  (check-rd rd-atom "-42i16" (term:surface:num:int _ -42 '- 16 16 #f) "")
+  (check-rd rd-atom  "42i16" (term:surface:num:int _  42 #f 16 16 #f) "")
+  (check-rd rd-atom "+42i16" (term:surface:num:int _  42 '+ 16 16 #f) "")
+  (check-rd rd-atom "-42i64" (term:surface:num:int _ -42 '- 64 64 #f) "")
+  (check-rd rd-atom  "42i64" (term:surface:num:int _  42 #f 64 64 #f) "")
+  (check-rd rd-atom "+42i64" (term:surface:num:int _  42 '+ 64 64 #f) "")
   ;; xxx other numbers
   (check-rd rd-atom "+" (term:surface:op _ (term:surface:id _ '+)) "")
   (check-rd rd-atom "++" (term:surface:op _ (term:surface:id _ '++)) "")
@@ -650,6 +681,13 @@
   (check-rd-err rd-file "#lang rkfoo")
   (check-rd-err rd-file "#lang rkt foo"))
 
+(define rd-body rd-text-outer)
+
 (provide
  (contract-out
-  [rd-file (-> input-port? term:surface-file?)]))
+  [rd-file 
+   (-> input-port?
+       term:surface-file?)]
+  [rd-body
+   (-> input-port?
+       term:surface:text?)]))
