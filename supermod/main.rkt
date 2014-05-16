@@ -1,104 +1,17 @@
 #lang racket/base
 (require racket/match
-         racket/set)
+         racket/set
+         "stdlib.rkt")
 
 (struct runtime (mod->code phase->mod->val) #:transparent)
 (define (make-runtime-system)
   (runtime (hash) (hasheq)))
 
-(struct CLOSURE (arg body top-env env))
-
 ;; xxx add mutation and separate compilation
 ;; xxx demonstrate for-template (arbitrary)
 ;; xxx demonstrate for-template ("recursive" or "self")
 ;; xxx add syntax-local-value
-(define STDLIB
-  (hash
-   '(number)
-   (vector '(#%return 1)
-           1)
 
-   '(symbol)
-   (vector '(#%return 'test)
-           'test)
-
-   '(string)
-   (vector '(#%return "string")
-           "string")
-
-   '(null)
-   (vector '(#%return #%null)
-           '())
-
-   '(cons)
-   (vector '(#%return (#%cons 0 1))
-           '(0 . 1))
-
-   '(car)
-   (vector '(#%return (#%car (#%cons 0 1)))
-           0)
-
-   '(cdr)
-   (vector '(#%return (#%cdr (#%cons 0 1)))
-           1)
-
-   '(if#t)
-   (vector '(#%return (#%if #t 0 1))
-           0)
-
-   '(if#f)
-   (vector '(#%return (#%if #f 0 1))
-           1)
-
-   '(eq?#f)
-   (vector '(#%return (#%eq? 1 0))
-           #f)
-
-   '(app)
-   (vector '(#%return (#%app (#%lambda x (#%local x)) 1))
-           1)
-
-   '(link)
-   (vector '(#%link (app) (#%return (#%top (app))))
-           1)
-
-   '(fun)
-   (vector '(#%return (#%lambda x (#%cons 0 (#%local x))))
-           CLOSURE?)
-
-   '(fun-call)
-   (vector '(#%link (fun)
-                    (#%return (#%app (#%lambda c (#%cons (#%car (#%local c))
-                                                         (#%cdr (#%local c))))
-                                     (#%app (#%top (fun)) 1))))
-           '(0 . 1))
-
-   '(mc-macro)
-   (vector '(#%return (#%lambda stx (#%cons '#%return (#%cons 0 #%null))))
-           CLOSURE?)
-
-   '(mc-transform)
-   (vector '(#%transform (mc-macro)
-                         (#%invoke (mc-macro) random stuff after))
-           0)
-
-   '(e-macro)
-   (vector '(#%return (#%lambda stx 0))
-           CLOSURE?)
-
-   '(e-transform)
-   (vector '(#%transform (e-macro)
-                         (#%return (#%invoke (e-macro) random stuff after)))
-           0)
-
-   '(e-macro-for-syntax)
-   (vector '(#%link (number) (#%return (#%lambda stx (#%top (number)))))
-           CLOSURE?)
-
-   '(e-transform-for-syntax)
-   (vector '(#%transform (e-macro-for-syntax)
-                         (#%return (#%invoke (e-macro-for-syntax) random stuff after)))
-           1)))
 (define (read-mod rts mod)
   (vector-ref
    (hash-ref
@@ -228,6 +141,7 @@
     [_
      (error 'interp-mod-code "unexpected term ~e" mc)]))
 
+(struct CLOSURE (arg body top-env env))
 (define (apply-closure fv av)
   (match fv
     [(CLOSURE arg body clo-top-env clo-env)
@@ -235,6 +149,7 @@
       clo-top-env
       (hash-set clo-env arg av)
       body)]))
+
 (define (interp-expr top-env env e)
   (match e
     [(or (? number? n)
@@ -297,9 +212,11 @@
       (define-values (rts-p act-val) (interp-mod rts (set) 0 mod))
       (match-define (vector mc exp-val) mc*v)
       (test-case (format "~a: ~e" mod mc)
-                 (if (procedure? exp-val)
-                   (check-pred exp-val act-val)
-                   (check-equal? act-val exp-val)))
+                 (match exp-val
+                   ['CLOSURE?
+                    (check-pred CLOSURE? act-val)]
+                   [_
+                    (check-equal? act-val exp-val)]))
       rts-p))
   (require racket/pretty)
   (pretty-print final-rts))
