@@ -1,6 +1,7 @@
 #lang racket/base
 (require racket/match
          racket/set
+         racket/pretty
          "stdlib.rkt")
 
 (struct runtime (mod->code phase->mod->val) #:transparent)
@@ -8,7 +9,6 @@
   (runtime (hash) (hasheq)))
 
 ;; xxx add mutation and separate compilation
-;; xxx demonstrate for-template (arbitrary)
 ;; xxx demonstrate for-template ("recursive" or "self")
 ;; xxx add syntax-local-value
 
@@ -24,13 +24,13 @@
   (cond
     [(hash-has-key? (runtime-mod->code rts) mod)
      rts]
-    [(set-member? mod req-path)
+    [(set-member? req-path mod)
      (error 'compile-mod "Recursive compile detected for ~e" mod)]
     [else
      (define mod-src (read-mod rts mod))
      ;; xxx clean out other phases
      (define-values (rts-p mod-code)
-       (expand-mod-src rts (set-add mod req-path) phase (hash) mod-src))
+       (expand-mod-src rts (set-add req-path mod) phase (hash) mod-src))
      (struct-copy
       runtime rts-p
       [mod->code
@@ -44,13 +44,21 @@
     [`(#%link ,mod ,e)
      (define-values (rts-p mc) (expand-mod-src rts req-path phase exp-env e))
      (values rts-p `(#%link ,mod ,mc))]
+    [`(#%template ,mod ,e)
+     (define-values (rts-p mc) (expand-mod-src rts req-path phase exp-env e))
+     (values rts-p `(#%template ,mod ,mc))]
     [`(#%transform ,mod ,e)
-     (define-values (rts-p mod-val)
+     (define-values (rts-p mod-res)
        (interp-mod rts req-path (add1 phase) mod))
+     (match-define (MOD-RESULT mod-temps mod-val) mod-res)
      (define exp-env-p
        (hash-set exp-env mod mod-val))
      (define-values (rts-pp mc)
-       (expand-mod-src rts-p req-path phase exp-env-p e))
+       (expand-mod-src 
+        rts-p req-path phase exp-env-p 
+        (for/fold ([e e])
+            ([mod (in-set mod-temps)])
+          `(#%link ,mod ,e))))
      (values rts-pp mc)]
     [`(#%invoke ,x . ,_)
      (expand-mod-src
@@ -105,18 +113,19 @@
 
 (define (interp-mod rts req-path phase mod)
   (cond
-    [(set-member? mod req-path)
+    [(set-member? req-path mod)
      (error 'interp-mod "Recursive require detected for ~e" mod)]
     [else
      (define rts-p (compile-mod rts req-path phase mod))
      (define mod-code (hash-ref (runtime-mod->code rts-p) mod))
+     (pretty-print (vector mod mod-code))
      (define mod->val (hash-ref (runtime-phase->mod->val rts-p) phase (hash)))
      (cond
        [(hash-has-key? mod->val mod)
         (values rts-p (hash-ref mod->val mod))]
        [else
         (define-values (rts-pp mod-val)
-          (interp-mod-code rts-p (set-add mod req-path) phase (hash) mod-code))
+          (interp-mod-code rts-p (set-add req-path mod) phase (hash) mod-code))
         (values
          (struct-copy
           runtime rts-pp
@@ -128,16 +137,25 @@
                         (hash))])
          mod-val)])]))
 
+(struct MOD-RESULT (templates val) #:transparent)
 (define (interp-mod-code rts req-path phase top-env mc)
   (match mc
     [`(#%return ,e)
-     (values rts (interp-expr top-env (hasheq) e))]
+     (values rts (MOD-RESULT (set) (interp-expr top-env (hasheq) e)))]
     [`(#%link ,mod ,mc)
      (define-values (rts-p mod-val)
        (interp-mod rts req-path phase mod))
+     ;; xxx take its templates?g
      (define top-env-p
-       (hash-set top-env mod mod-val))
+       (hash-set top-env mod (MOD-RESULT-val mod-val)))
      (interp-mod-code rts-p req-path phase top-env-p mc)]
+    [`(#%template ,mod ,mc)
+     (define-values (rts-p mr)
+       (interp-mod-code rts req-path phase top-env mc))
+     (values rts-p
+             (struct-copy MOD-RESULT mr
+                          [templates
+                           (set-add (MOD-RESULT-templates mr) mod)]))]
     [_
      (error 'interp-mod-code "unexpected term ~e" mc)]))
 
@@ -209,7 +227,8 @@
   (define final-rts
     (for/fold ([rts (make-runtime-system)])
         ([(mod mc*v) (in-hash STDLIB)])
-      (define-values (rts-p act-val) (interp-mod rts (set) 0 mod))
+      (define-values (rts-p mr) (interp-mod rts (set) 0 mod))
+      (define act-val (MOD-RESULT-val mr))
       (match-define (vector mc exp-val) mc*v)
       (test-case (format "~a: ~e" mod mc)
                  (match exp-val

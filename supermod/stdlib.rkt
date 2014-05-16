@@ -87,4 +87,19 @@
    '(e-transform-for-syntax)
    (vector '(#%transform (e-macro-for-syntax)
                          (#%return (#%invoke (e-macro-for-syntax) random stuff after)))
+           1)
+
+   '(e-macro-for-template)
+   (vector '(#%template
+             (number)
+             (#%return
+              (#%lambda stx
+                        (#%cons '#%top (#%cons (#%cons 'number #%null) #%null)))))
+           'CLOSURE?)
+
+   '(e-transform-for-template)
+   (vector '(#%transform (e-macro-for-template)
+                         (#%return
+                          (#%invoke (e-macro-for-template)
+                                    random stuff after)))
            1)))
