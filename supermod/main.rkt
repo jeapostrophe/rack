@@ -6,37 +6,104 @@
 (define (make-runtime-system)
   (runtime (hash) (hasheq)))
 
+(struct CLOSURE (arg body top-env env))
+
+;; xxx add mutation and separate compilation
+;; xxx demonstrate for-template
 (define STDLIB
   (hash
-   '(number) '(#%return 1)
-   '(symbol) '(#%return 'test)
-   '(string) '(#%return "string")
-   '(null) '(#%return #%null)
-   '(cons) '(#%return (#%cons 0 1))
-   '(car) '(#%return (#%car (#%cons 0 1)))
-   '(cdr) '(#%return (#%cdr (#%cons 0 1)))
-   '(if#t) '(#%return (#%if #t 0 1))
-   '(if#f) '(#%return (#%if #f 0 1))
-   '(eq?#f) '(#%return (#%eq? 1 0))
-   '(app) '(#%return (#%app (#%lambda x (#%local x)) 1))
-   '(link) '(#%link (app) (#%return (#%top (app))))
-   '(fun) '(#%return (#%lambda x (#%cons 0 (#%local x))))
+   '(number)
+   (vector '(#%return 1)
+           1)
+
+   '(symbol)
+   (vector '(#%return 'test)
+           'test)
+
+   '(string)
+   (vector '(#%return "string")
+           "string")
+
+   '(null)
+   (vector '(#%return #%null)
+           '())
+
+   '(cons)
+   (vector '(#%return (#%cons 0 1))
+           '(0 . 1))
+
+   '(car)
+   (vector '(#%return (#%car (#%cons 0 1)))
+           0)
+
+   '(cdr)
+   (vector '(#%return (#%cdr (#%cons 0 1)))
+           1)
+
+   '(if#t)
+   (vector '(#%return (#%if #t 0 1))
+           0)
+
+   '(if#f)
+   (vector '(#%return (#%if #f 0 1))
+           1)
+
+   '(eq?#f)
+   (vector '(#%return (#%eq? 1 0))
+           #f)
+
+   '(app)
+   (vector '(#%return (#%app (#%lambda x (#%local x)) 1))
+           1)
+
+   '(link)
+   (vector '(#%link (app) (#%return (#%top (app))))
+           1)
+
+   '(fun)
+   (vector '(#%return (#%lambda x (#%cons 0 (#%local x))))
+           CLOSURE?)
+
    '(fun-call)
-   '(#%link (fun)
-            (#%return (#%app (#%lambda c (#%cons (#%car (#%local c))
-                                                 (#%cdr (#%local c))))
-                             (#%app (#%top (fun)) 1))))
-   '(mc-macro) '(#%return (#%lambda stx (#%cons '#%return (#%cons 0 #%null))))
-   '(mc-transform) '(#%transform (mc-macro)
-                                 (#%invoke (mc-macro) random stuff after))
-   '(e-macro) '(#%return (#%lambda stx 0))
-   '(e-transform) '(#%transform (e-macro)
-                                (#%return (#%invoke (e-macro) random stuff after)))))
+   (vector '(#%link (fun)
+                    (#%return (#%app (#%lambda c (#%cons (#%car (#%local c))
+                                                         (#%cdr (#%local c))))
+                                     (#%app (#%top (fun)) 1))))
+           '(0 . 1))
+
+   '(mc-macro)
+   (vector '(#%return (#%lambda stx (#%cons '#%return (#%cons 0 #%null))))
+           CLOSURE?)
+
+   '(mc-transform)
+   (vector '(#%transform (mc-macro)
+                         (#%invoke (mc-macro) random stuff after))
+           0)
+
+   '(e-macro)
+   (vector '(#%return (#%lambda stx 0))
+           CLOSURE?)
+
+   '(e-transform)
+   (vector '(#%transform (e-macro)
+                         (#%return (#%invoke (e-macro) random stuff after)))
+           0)
+
+   '(e-macro-for-syntax)
+   (vector '(#%link (number) (#%return (#%lambda stx (#%top (number)))))
+           CLOSURE?)
+
+   '(e-transform-for-syntax)
+   (vector '(#%transform (e-macro-for-syntax)
+                         (#%return (#%invoke (e-macro-for-syntax) random stuff after)))
+           1)))
 (define (read-mod rts mod)
-  (hash-ref
-   STDLIB mod
-   (λ ()
-     (error 'read-mod "Cannot find source of ~e" mod))))
+  (vector-ref
+   (hash-ref
+    STDLIB mod
+    (λ ()
+      (error 'read-mod "Cannot find source of ~e" mod)))
+   0))
 
 (define (compile-mod rts req-path phase mod)
   (cond
@@ -159,7 +226,6 @@
     [_
      (error 'interp-mod-code "unexpected term ~e" mc)]))
 
-(struct CLOSURE (arg body top-env env))
 (define (apply-closure fv av)
   (match fv
     [(CLOSURE arg body clo-top-env clo-env)
@@ -222,8 +288,16 @@
    (supermod name)))
 
 (module+ test
-  (for/fold ([rts (make-runtime-system)])
-      ([mod (in-hash-keys STDLIB)])
-    (define-values (rts-p val) (interp-mod rts (set) 0 mod))
-    (printf "~a => ~v\n" mod val)
-    rts-p))
+  (require rackunit)
+  (define final-rts
+    (for/fold ([rts (make-runtime-system)])
+        ([(mod mc*v) (in-hash STDLIB)])
+      (define-values (rts-p act-val) (interp-mod rts (set) 0 mod))
+      (match-define (vector mc exp-val) mc*v)
+      (test-case (format "~a: ~e" mod mc)
+                 (if (procedure? exp-val)
+                   (check-pred exp-val act-val)
+                   (check-equal? act-val exp-val)))
+      rts-p))
+  (require racket/pretty)
+  (pretty-print final-rts))
