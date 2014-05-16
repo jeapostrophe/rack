@@ -9,7 +9,9 @@
 (struct CLOSURE (arg body top-env env))
 
 ;; xxx add mutation and separate compilation
-;; xxx demonstrate for-template
+;; xxx demonstrate for-template (arbitrary)
+;; xxx demonstrate for-template ("recursive" or "self")
+;; xxx add syntax-local-value
 (define STDLIB
   (hash
    '(number)
