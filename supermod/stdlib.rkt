@@ -116,4 +116,21 @@
                          (#%return
                           (#%invoke (e-macro-for-template-for-syntax)
                                     random stuff after)))
-           1)))
+           1)
+
+   '(box)
+   (vector '(#%return (#%box 0))
+           'BOX?)
+   '(unbox)
+   (vector '(#%return (#%unbox (#%box 0)))
+           '0)
+   '(set-box!)
+   (vector '(#%link (box) (#%return (#%set-box! (#%top (box)) 1)))
+           '1)
+   '(unbox2)
+   (vector '(#%link (box) 
+                    (#%link (set-box!)
+                            (#%return (#%unbox (#%top (box))))))
+           '1)
+
+   ))

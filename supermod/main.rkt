@@ -1,7 +1,6 @@
 #lang racket/base
 (require racket/match
          racket/set
-         racket/pretty
          "stdlib.rkt")
 
 (struct runtime (mod->code phase->mod->val) #:transparent)
@@ -11,6 +10,7 @@
 ;; xxx add mutation and separate compilation
 ;; xxx demonstrate for-template ("recursive" or "self")
 ;; xxx add syntax-local-value
+;; xxx implement hygeine, add lexical context to e in invoke-expander
 
 (define (read-mod rts mod)
   (vector-ref
@@ -28,7 +28,6 @@
      (error 'compile-mod "Recursive compile detected for ~e" mod)]
     [else
      (define mod-src (read-mod rts mod))
-     ;; xxx clean out other phases
      (define-values (rts-p mod-code)
        (expand-mod-src rts (set-add req-path mod) phase (hash) mod-src))
      (struct-copy
@@ -77,32 +76,16 @@
          '#%null
          `',_)
      e]
-    [`(#%app ,f ,e)
-     `(#%app ,(expand-expr exp-env f)
-             ,(expand-expr exp-env e))]
-    [`(#%cons ,f ,e)
-     `(#%cons ,(expand-expr exp-env f)
-              ,(expand-expr exp-env e))]
-    [`(#%eq? ,f ,e)
-     `(#%eq? ,(expand-expr exp-env f)
-             ,(expand-expr exp-env e))]
-    [`(#%if ,c ,t ,f)
-     `(#%if ,(expand-expr exp-env c)
-            ,(expand-expr exp-env t)
-            ,(expand-expr exp-env f))]
-    [`(#%car ,e)
-     `(#%car ,(expand-expr exp-env e))]
-    [`(#%cdr ,e)
-     `(#%cdr ,(expand-expr exp-env e))]
     [`(#%lambda ,x ,e)
      `(#%lambda ,x ,(expand-expr exp-env e))]
     [`(#%invoke ,x . ,_)
      (expand-expr exp-env
                   (invoke-expander exp-env x e))]
+    [`(,form . ,args)
+     `(,form . ,(map (λ (e) (expand-expr exp-env e)) args))]
     [_
      (error 'expand-expr "unexpected term ~e" e)]))
 
-;; xxx implement hygeine, add lexical context to e, etc
 (define (invoke-expander exp-env x e)
   (define f
     (hash-ref exp-env x
@@ -118,7 +101,6 @@
     [else
      (define rts-p (compile-mod rts req-path phase mod))
      (define mod-code (hash-ref (runtime-mod->code rts-p) mod))
-     (pretty-print (vector mod mod-code))
      (define mod->val (hash-ref (runtime-phase->mod->val rts-p) phase (hash)))
      (cond
        [(hash-has-key? mod->val mod)
@@ -192,6 +174,15 @@
      (car (interp-expr top-env env e))]
     [`(#%cdr ,e)
      (cdr (interp-expr top-env env e))]
+    [`(#%box ,e)
+     (box (interp-expr top-env env e))]
+    [`(#%unbox ,e)
+     (unbox (interp-expr top-env env e))]
+    [`(#%set-box! ,b-e ,nv-e)
+     (define b (interp-expr top-env env b-e))
+     (define nv (interp-expr top-env env nv-e))
+     (set-box! b nv)
+     nv]
     [`(#%if ,c ,t ,f)
      (interp-expr top-env env (if (interp-expr top-env env c) t f))]
     [`(#%lambda ,arg ,body)
@@ -238,6 +229,8 @@
                  (match exp-val
                    ['CLOSURE?
                     (check-pred CLOSURE? act-val)]
+                   ['BOX?
+                    (check-pred box? act-val)]
                    [_
                     (check-equal? act-val exp-val)]))
       rts-p))
