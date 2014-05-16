@@ -128,9 +128,66 @@
    (vector '(#%link (box) (#%return (#%set-box! (#%top (box)) 1)))
            '1)
    '(unbox2)
-   (vector '(#%link (box) 
+   (vector '(#%link (box)
                     (#%link (set-box!)
                             (#%return (#%unbox (#%top (box))))))
            '1)
+
+   '(sc-box)
+   (vector '(#%return (#%box 0)) 'BOX?)
+   '(sc-set-box)
+   (vector '(#%link (sc-box) (#%return (#%set-box! (#%top (sc-box)) 1))) 1)
+   '(sc-setmac)
+   (vector '(#%link (sc-box)
+                    (#%return
+                     (#%lambda stx
+                               (#%app (#%lambda _ (#%unbox (#%top (sc-box))))
+                                      (#%set-box! (#%top (sc-box)) 2)))))
+           'CLOSURE?)
+   '(sc-getmac)
+   (vector '(#%link (sc-box)
+                    (#%return
+                     (#%lambda stx
+                               (#%unbox (#%top (sc-box))))))
+           'CLOSURE?)
+   '(sc-macuse)
+   (vector '(#%transform
+             (sc-setmac)
+             (#%transform
+              (sc-getmac)
+              (#%return
+               (#%app (#%lambda x
+                                (#%app (#%lambda _ (#%local x))
+                                       (#%invoke (sc-setmac))))
+                      (#%invoke (sc-getmac))))))
+           2)
+   '(sc-use)
+   (vector '(#%link
+             (sc-box)
+             (#%link
+              (sc-set-box)
+              (#%transform
+               (sc-setmac)
+               (#%transform
+                (sc-getmac)
+                (#%link
+                 (sc-macuse)
+                 (#%return
+                  (#%cons
+                   (#%unbox (#%top (sc-box)))
+                   (#%cons
+                    (#%invoke (sc-getmac))
+                    (#%cons
+                     (#%top (sc-macuse))
+                     (#%cons
+                      (#%unbox (#%top (sc-box)))
+                      (#%cons
+                       (#%invoke (sc-setmac))
+                       (#%cons (#%top (sc-macuse))
+                               (#%cons (#%unbox (#%top (sc-box)))
+                                       (#%cons (#%invoke (sc-getmac))
+                                               (#%cons (#%top (sc-macuse))
+                                                       #%null)))))))))))))))
+           '(1 0 2 1 2 2 1 2 2))
 
    ))

@@ -218,21 +218,29 @@
    (supermod name)))
 
 (module+ test
-  (require rackunit)
-  (define final-rts
-    (for/fold ([rts (make-runtime-system)])
-        ([(mod mc*v) (in-hash STDLIB)])
-      (define-values (rts-p mr) (interp-mod rts (set) 0 mod))
-      (define act-val (MOD-RESULT-val mr))
-      (match-define (vector mc exp-val) mc*v)
-      (test-case (format "~a: ~e" mod mc)
-                 (match exp-val
-                   ['CLOSURE?
-                    (check-pred CLOSURE? act-val)]
-                   ['BOX?
-                    (check-pred box? act-val)]
-                   [_
-                    (check-equal? act-val exp-val)]))
-      rts-p))
-  (require racket/pretty)
-  (pretty-print final-rts))
+  (require rackunit
+           racket/pretty)
+
+  (define (check-mod-mc*v rts mod mc*v)
+    (match-define (vector mc exp-val) mc*v)
+
+    (define-values (rts-p mr)
+      (interp-mod rts (set) 0 mod))
+    (define act-val (MOD-RESULT-val mr))
+    (test-case (format "~a: ~e\n~v" mod mc rts-p)
+               (match exp-val
+                 ['CLOSURE?
+                  (check-pred CLOSURE? act-val)]
+                 ['BOX?
+                  (check-pred box? act-val)]
+                 [_
+                  (check-equal? act-val exp-val)]))
+    rts-p)
+
+  (for ([(mod mc*v) (in-hash STDLIB)])
+    (define rts (make-runtime-system))
+    (define rts-p (check-mod-mc*v rts mod mc*v))
+    (test-case
+     (format "~a: second run" mod)
+     (for ([(mod mc*v) (in-hash STDLIB)])
+       (check-mod-mc*v rts-p mod mc*v)))))
