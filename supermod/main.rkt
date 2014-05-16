@@ -11,6 +11,7 @@
 
 ;; xxx demonstrate for-template ("recursive" or "self")
 ;; xxx add syntax-local-value
+;; xxx add let-syntax
 ;; xxx implement hygeine, add lexical context to e in invoke-expander
 
 (define (read-mod rts mod)
@@ -167,6 +168,17 @@
       (hash-set clo-env arg av)
       body)]))
 
+(define PRIMS
+  (hasheq
+   '#%cons cons
+   '#%eq? eq?
+   '#%car car
+   '#%cdr cdr
+   '#%box box
+   '#%unbox unbox
+   '#%set-box! (λ (b nv) (set-box! b nv) nv)))
+(define (PRIMITIVE? x)
+  (hash-has-key? PRIMS x))
 (define (interp-expr top-env env e)
   (match e
     [(or (? number? n)
@@ -177,25 +189,10 @@
      null]
     [`',s
      s]
-    [`(#%cons ,a ,d)
-     (cons (interp-expr top-env env a)
-           (interp-expr top-env env d))]
-    [`(#%eq? ,a ,d)
-     (eq? (interp-expr top-env env a)
-          (interp-expr top-env env d))]
-    [`(#%car ,e)
-     (car (interp-expr top-env env e))]
-    [`(#%cdr ,e)
-     (cdr (interp-expr top-env env e))]
-    [`(#%box ,e)
-     (box (interp-expr top-env env e))]
-    [`(#%unbox ,e)
-     (unbox (interp-expr top-env env e))]
-    [`(#%set-box! ,b-e ,nv-e)
-     (define b (interp-expr top-env env b-e))
-     (define nv (interp-expr top-env env nv-e))
-     (set-box! b nv)
-     nv]
+    [(cons (? PRIMITIVE? prim) args)
+     (apply (hash-ref PRIMS prim) 
+            (map (λ (e) (interp-expr top-env env e))
+                 args))]
     [`(#%if ,c ,t ,f)
      (interp-expr top-env env (if (interp-expr top-env env c) t f))]
     [`(#%lambda ,arg ,body)
