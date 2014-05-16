@@ -102,4 +102,18 @@
                          (#%return
                           (#%invoke (e-macro-for-template)
                                     random stuff after)))
+           1)
+
+   '(e-macro-for-template-for-syntax)
+   (vector '(#%link
+             (e-macro-for-template)
+             (#%return
+              (#%top (e-macro-for-template))))
+           'CLOSURE?)
+
+   '(e-transform-for-template-for-syntax)
+   (vector '(#%transform (e-macro-for-template-for-syntax)
+                         (#%return
+                          (#%invoke (e-macro-for-template-for-syntax)
+                                    random stuff after)))
            1)))

@@ -54,8 +54,8 @@
      (define exp-env-p
        (hash-set exp-env mod mod-val))
      (define-values (rts-pp mc)
-       (expand-mod-src 
-        rts-p req-path phase exp-env-p 
+       (expand-mod-src
+        rts-p req-path phase exp-env-p
         (for/fold ([e e])
             ([mod (in-set mod-temps)])
           `(#%link ,mod ,e))))
@@ -143,12 +143,16 @@
     [`(#%return ,e)
      (values rts (MOD-RESULT (set) (interp-expr top-env (hasheq) e)))]
     [`(#%link ,mod ,mc)
-     (define-values (rts-p mod-val)
+     (define-values (rts-p mod-res)
        (interp-mod rts req-path phase mod))
-     ;; xxx take its templates?g
+     (match-define (MOD-RESULT mod-temps mod-val) mod-res)
      (define top-env-p
-       (hash-set top-env mod (MOD-RESULT-val mod-val)))
-     (interp-mod-code rts-p req-path phase top-env-p mc)]
+       (hash-set top-env mod mod-val))
+     (interp-mod-code
+      rts-p req-path phase top-env-p
+      (for/fold ([mc mc])
+          ([mod (in-set mod-temps)])
+        `(#%template ,mod ,mc)))]
     [`(#%template ,mod ,mc)
      (define-values (rts-p mr)
        (interp-mod-code rts req-path phase top-env mc))
