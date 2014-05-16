@@ -3,6 +3,7 @@
          racket/set
          "stdlib.rkt")
 
+;; mod->code represents the zo cache on the filesystem
 (struct runtime (mod->code phase0:mod->val phase1:mod->val)
         #:transparent)
 (define (make-runtime-system)
@@ -54,14 +55,18 @@
      (define phase1-rts
        (struct-copy
         runtime (make-runtime-system)
+        ;; copy zos
         [mod->code (runtime-mod->code rts)]
+        ;; shift phase1 down to phase0
         [phase0:mod->val (runtime-phase1:mod->val rts)]))
      (define-values (phase1-rts-p mod-res)
        (interp-mod phase1-rts req-path mod))
      (define rts-p
        (struct-copy
         runtime rts
+        ;; copy zos
         [mod->code (runtime-mod->code phase1-rts-p)]
+        ;; shift phase0 up to phase1
         [phase1:mod->val (runtime-phase0:mod->val phase1-rts-p)]))
      (match-define (MOD-RESULT mod-temps mod-val) mod-res)
      (define exp-env-p
