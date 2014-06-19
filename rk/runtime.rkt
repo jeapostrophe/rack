@@ -1,11 +1,14 @@
 #lang racket/base
-(require ffi/base)
+(require ffi/unsafe
+         racket/list)
 
 (struct obj (pointers atomics))
 (define (make-object pointer-count atomic-size)
   (obj (make-vector pointer-count) (malloc atomic-size)))
 (define (object-ref-ptr o i)
   (vector-ref (obj-pointers obj) i))
+(define (object-set-ptr! o i v)
+  (error))
 (define (object-ref-atomics o)
   (obj-atomics obj))
 
@@ -19,11 +22,11 @@
     (object-set-ptr! o 1 x)
     o)
   (define (unseal x)
-    (object-ref-ptr o 1))
+    (object-ref-ptr x 1))
   (values seal? seal unseal))
 
 (define (make-interface funs)
-  (make-vector funs))
+  (make-vector (length funs)))
 (module+ test
   (define queue^
     (make-interface '(cons snoc head tail)))
