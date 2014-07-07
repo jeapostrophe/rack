@@ -9,6 +9,8 @@ TOOD:
 - reprinter from surface syntax
 - std indenter from surface syntax
 - default ()s info from ast
+- add overflow detecting math ops
+- SamTH thinks we need eq?
 
 IDEA:
 - macros are a defined API on an AST/frontend

@@ -9,6 +9,10 @@
 (define (make-runtime-system)
   (runtime (hash) (hash) (hash)))
 
+;; xxx templates are bit wrong relative to racket, because they aren't
+;; on-demand, in other words, this doesn't have the concept of
+;; "available" versus "instantiated"
+
 ;; xxx demonstrate for-template ("recursive" or "self")
 ;; xxx add syntax-local-value
 ;; xxx add let-syntax
