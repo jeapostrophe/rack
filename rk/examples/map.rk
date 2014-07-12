@@ -1,0 +1,65 @@
+#lang racket/2
+
+interface minimal-sequence1 {
+ @doc{@this represents the essence of sequences of elements.}
+
+ export empty {
+  @doc{@this is a sequence with no elements.}
+ };
+
+ export empty? {
+  @doc{@this identifies @code[empty].}
+ };
+
+ export (cons, cons?, first, rest);
+
+ properties {
+  (empty? empty) = true
+ }, {
+  forall (x y),
+   ((empty? (cons x y)) = false)
+ }, {
+  forall (x y),
+   ((cons? (cons x y)) = true)
+ }, {
+  (cons? empty) = false  
+ }, {
+  forall x y,
+   (first (cons x y)) = x
+ }, {
+  forall x y,
+   (rest (cons x y)) = y
+ };
+};
+
+interface sequence1 {
+ export length;
+
+ properties {
+  length empty = 0;
+ }, {
+  forall (x y),
+   (length (cons x y) = 1 + length y)
+ };
+};
+
+XXX It would painful to implement a bunch of things like this that add
+things individually. How about instead just write the code and infer
+what it requires?
+
+implementation minimal-sequence1->sequence1 {
+ import minimal-sequence1;
+ export sequence1;
+
+ fun length ( seq ) {
+  rlength( seq, 0 );
+ }
+
+ fun rlength ( seq, fin ) {
+  if (empty? seq) {
+   fun;
+  } else {
+   rlength (rest seq) (1 + fin);
+  }
+ };
+};
