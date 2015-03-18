@@ -13,6 +13,7 @@ TOOD:
 - SamTH thinks we need eq?
 
 IDEA:
+- sub/super-script
 - macros are a defined API on an AST/frontend
 - this makes writing front-ends easier
 - how to make analysis easier?
