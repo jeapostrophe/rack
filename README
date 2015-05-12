@@ -1,6 +1,30 @@
 an experimental racket-y language/vm
 
-TOOD:
+https://idea.popcount.org/2013-07-24-ir-is-better-than-assembly/
+http://llvm.org/devmtg/2011-09-16/EuroLLVM2011-MoreTargetIndependentLLVMBitcode.pdf
+
+Read an interesting post by Dan Gohlman (sp?) about how LLVM is not a
+portable IR, thought about directly generating my own assembly because
+of that.
+- x86 is the natural target, but ARM would be nice for iPhones
+- gas has multiple outputs, but neither is portable
+- yasm seems pretty cool because it has an API
+++ http://www.tortall.net/projects/yasm/manual/html/manual.html
+- https://github.com/perl11/potion
+
+https://idea.popcount.org/2013-07-16-baby-steps-in-x86-assembly/
+
+Maybe just use C? And think of it as a way of writing C nicely.
+- Problems: Tail calls and parsing headers to get stuff like completion
+- Trampolining is kind of invasive
+- __attribute__((noreturn))
+- http://david.wragg.org/blog/
+https://github.com/dpw/pachuco/blob/master/LANGUAGE.md
+http://www.complang.tuwien.ac.at/schani/diplarb.ps
+
+https://github.com/yinwang0/yscheme/blob/master/compiler.ss
+
+TODO:
 - hook up reader/parser to rack/eu
 - add more tests to reader/parser
 - add more forms to rack/eu
