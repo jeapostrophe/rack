@@ -20,6 +20,7 @@
 (module+ main
   (require racket/pretty
            racket/port
+           racket/system
            racket/string)
   (printf "mctop!\n")
 
@@ -40,10 +41,28 @@
            (match (read-from-string str)
              [`(compile ,prog)
               (define prog-str (string-join prog "\n"))
-              (with-output-to-file "t.llvm"
+              (with-output-to-file "t.ll"
                 #:exists 'replace
                 (λ () (display prog-str)))
-              (define out prog-str)
+              (define the-string-port (open-output-string))
+              (parameterize ([current-output-port the-string-port]
+                             [current-error-port the-string-port])
+                (printf "\nAssembling\n")
+                (system* (find-executable-path "llvm-as") "t.ll" "-o" "t.bc")
+                (printf "\nInspecting bitcode\n")
+                (system* (find-executable-path "llvm-nm") "t.bc")
+                (printf "\nInterpreting bitcode\n")
+                (system* (find-executable-path "lli") "-O3" "t.bc")
+                (printf "\nCompiling bitcode\n")
+                (system* (find-executable-path "llc") "-O3"
+                         "-filetype=obj" "t.bc" "-o" "t.o")
+                (printf "\nInspecting object\n")
+                (system* (find-executable-path "nm") "t.o")
+                (printf "\nLinking object\n")
+                (system* (find-executable-path "clang") "t.o" "-o" "t.exe")
+                (printf "\nRunning binary\n")
+                (system* "t.exe"))
+              (define out (get-output-string the-string-port))
               (values out st)]
              [_
               (values "NO" st)]))
