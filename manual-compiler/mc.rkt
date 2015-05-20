@@ -11,7 +11,7 @@
     [Float
      (f32) (f64)]
     (ptr to)
-    ;; xxx what does llvm is count isn't supported by hardware?
+    ;; xxx what does llvm do if count isn't supported by hardware?
     (vector count of)]
    [Aggregate
     (array count of)
@@ -100,13 +100,24 @@
   ;; xxx may only appear at the start of a block
   (phi [val label] ...)
   (select cond true false)
+  ;; xxx external means ccc
   (call:external fnptr arg ...)
+  ;; xxx internal means fastcc
   (call:internal fnptr arg ...)
-  ;; xxx really a terminator (although ret has to come next)
+  ;; xxx really a terminator (although ret has to come next) or don't
+  ;; and always emit things with tailcall flag for internal
   (tail-call:internal fnptr arg ...)]]
 
 ;; xxx fma
 ;; xxx masked vector load/store
 ;; xxx masked vector gather/scatter
 
-;; xxx define top-level structure
+;; xxx let* + local-ref + global-ref
+
+;; Module = definition ...
+;; Definition = name -> (variable | extern | function | struct)
+;; Variable = type, value, constant?
+;; Extern = type, name
+;; Function = type, block ...+
+;; Struct = type
+;; Block = label, phi nodes, instructions, terminator
