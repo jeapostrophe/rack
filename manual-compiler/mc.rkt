@@ -9,24 +9,54 @@
 (define-generics ll-formatable
   (ll-format ll-formatable))
 
+(struct fmt:indent (l))
+(struct fmt:newline ())
+
+(define (fmt:between l v)
+  (let loop ([l l])
+    (match l
+      ['() '()]
+      [(list a) a]
+      [(cons a d)
+       (cons (vector a v) (loop d))])))
+
 ;; xxx make something similar to create it in-memory
 (define (ll-out t)
-  (match t
-    [(or '() #f (? void?))
-     (void)]
-    [(cons a d)
-     (ll-out a)
-     (display #\space)
-     (ll-out d)]
-    [(or (? char?) (? string?))
-     (display t)]
-    [_
-     (ll-out (ll-format t))]))
+  (define (loop i-level space-on-left? t)
+    (match t
+      [(or '() #f (? void?))
+       space-on-left?]
+      [(cons a d)
+       (unless (loop i-level space-on-left? a)
+         (display #\space))
+       (loop i-level #t d)]
+      [(? vector? v)
+       (for/fold ([space-on-left? space-on-left?])
+                 ([a (in-vector v)])
+         (loop i-level space-on-left? a))]
+      [(or (? char?) (? string?))
+       (display t)
+       #f]
+      [(fmt:indent l)
+       (define ends-in-space?
+         (loop (add1 i-level) space-on-left?
+               (cons (fmt:newline)
+                     (fmt:between l (fmt:newline)))))
+       (loop i-level ends-in-space? (fmt:newline))]
+      [(fmt:newline)
+       (newline)
+       (for ([i (in-range i-level)])
+         (display "  "))
+       #t]
+      [_
+       (loop i-level space-on-left? (ll-format t))]))
+  (loop 0 #f t)
+  (void))
 
 (define-syntax (define-ll-type stx)
   (syntax-parse stx
     [(_ (name:id arg:id ...)
-        format-e:expr)
+        #:fmt format-e:expr)
      (with-syntax ([*name (format-id #'name "*~a" #'name)]
                    [ty:name (format-id #'name "ty:~a" #'name)]
                    [*name? (format-id #'name "*~a?" #'name)]
@@ -47,25 +77,25 @@
              (*name? x)))))]))
 
 (define-ll-type (void)
-  "void")
+  #:fmt "void")
 (define-ll-type (fun params return)
-  (list return "(" params ")"))
-(define-ll-type (i1) "i1")
-(define-ll-type (i8) "i8")
-(define-ll-type (i16) "i16")
-(define-ll-type (i32) "i32")
-(define-ll-type (i64) "i64")
-(define-ll-type (f32) "float")
-(define-ll-type (f64) "double")
+  #:fmt (vector return "(" params ")"))
+(define-ll-type (i1) #:fmt "i1")
+(define-ll-type (i8) #:fmt "i8")
+(define-ll-type (i16) #:fmt "i16")
+(define-ll-type (i32) #:fmt "i32")
+(define-ll-type (i64) #:fmt "i64")
+(define-ll-type (f32) #:fmt "float")
+(define-ll-type (f64) #:fmt "double")
 (define-ll-type (ptr to)
-  (list to "*"))
+  #:fmt (vector to "*"))
 (define-ll-type (vector count of)
   ;; xxx what does llvm do if count isn't supported by hardware?
-  (list "<" (number->string count) "x" of ">"))
+  #:fmt (vector "<" (list* (number->string count) "x" of) ">"))
 (define-ll-type (array count of)
-  (list "[" (number->string count) "x" of "]"))
+  #:fmt (vector "[" (list* (number->string count) "x" of) "]"))
 (define-ll-type (struct contents)
-  (list "{" (add-between contents ",") "}"))
+  #:fmt (vector "{" (fmt:between contents ",") "}"))
 
 (define (ty? x)
   (or (ty:void? x) (ty:addressable? x)))
@@ -91,8 +121,7 @@
     [(_ (name:id arg:id ...)
         #:ty type-e:expr
         #:fmt format-e:expr)
-     (with-syntax ([val:name (format-id #'name "val:~a" #'name)]
-                   [val:name? (format-id #'name "val:~a?" #'name)])
+     (with-syntax ([val:name (format-id #'name "val:~a" #'name)])
        (syntax/loc stx
          (struct val:name (arg ...)
            #:methods gen:ll-formatable
@@ -130,17 +159,17 @@
   #:fmt "null")
 
 (define (ll-ty+val-list l)
-  (add-between (map (λ (v) (list (ll-ty v) v)) l) ","))
+  (fmt:between (map (λ (v) (cons (ll-ty v) v)) l) ","))
 
 (define-ll-val (struct contents)
   #:ty (ty:struct contents)
-  #:fmt (list "{" (ll-ty+val-list contents) "}"))
+  #:fmt (vector "{" (ll-ty+val-list contents) "}"))
 (define-ll-val (array of contents)
   #:ty (ty:array (length contents) of)
-  #:fmt (list "[" (ll-ty+val-list contents) "]"))
+  #:fmt (vector "[" (ll-ty+val-list contents) "]"))
 (define-ll-val (vector of contents)
   #:ty (ty:array (length contents) of)
-  #:fmt (list "<" (ll-ty+val-list contents) ">"))
+  #:fmt (vector "<" (ll-ty+val-list contents) ">"))
 (define-ll-val (zero of)
   #:ty of
   #:fmt "zeroinitializer")
@@ -169,40 +198,163 @@
 (define (val:complex? x)
   (or (val:struct? x) (val:array? x) (val:vector? x) (val:zero? x)))
 
+(define-syntax (define-ll-inst stx)
+  (syntax-parse stx
+    [(_ (name:id arg:id ...)
+        #:fmt format-e:expr)
+     (with-syntax ([inst:name (format-id #'name "inst:~a" #'name)])
+       (syntax/loc stx
+         (struct inst:name (arg ...)
+           #:methods gen:ll-formatable
+           [(define (ll-format v)
+              (match-define (inst:name arg ...) v)
+              format-e)])))]))
+
+;; Terminators
+(define-ll-inst (ret-val v)
+  #:fmt (list "ret" (ll-ty v) v))
+(define-ll-inst (ret-void)
+  #:fmt "ret void")
+(define-ll-inst (br cond-v label-true label-false)
+  #:fmt (list "br" "i1" cond-v "," "label" label-true "," "label" label-false))
+(define-ll-inst (jump label-dest)
+  #:fmt (list "br" "label" label-dest))
+(define-ll-inst (switch switch-v label-default cases)
+  #:fmt (list "switch"
+              (ll-ty switch-v) switch-v ","
+              "label" label-default
+              "["
+              (fmt:indent
+               (for/list ([c (in-list cases)])
+                 (match-define (cons val label) c)
+                 (list (ll-ty val) val "," "label" label)))
+              "]"))
+;; /Terminators
+
+(define-ll-inst (define id val)
+  #:fmt (list id "=" val))
+
+(define-syntax (define-ll-expr stx)
+  (syntax-parse stx
+    [(_ (name:id arg:id ...)
+        #:ty type-e:expr
+        #:fmt format-e:expr)
+     (with-syntax ([expr:name (format-id #'name "expr:~a" #'name)])
+       (syntax/loc stx
+         (struct expr:name (arg ...)
+           #:methods gen:ll-formatable
+           [(define (ll-format v)
+              (match-define (expr:name arg ...) v)
+              format-e)]
+           #:methods gen:ll-typeable
+           [(define (ll-ty v)
+              (match-define (expr:name arg ...) v)
+              type-e)])))]))
+
+;; Variables
+(define-ll-expr (local ty id)
+  #:ty ty
+  #:fmt id)
+(define-ll-expr (global ty id)
+  #:ty (ty:ptr ty)
+  #:fmt id)
+
+;; Binary
+(define-ll-expr (mul res-ty op1 op2)
+  #:ty res-ty
+  #:fmt (list "mul" res-ty op1 "," op2))
+
+;; Memory
+(define-ll-expr (get-element-ptr ptr-val path)
+  #:ty (error 'get-element-ptr)
+  #:fmt (list "getelementptr" (ll-ty ptr-val) ptr-val ","
+              (fmt:between
+               (for/list ([p (in-list path)])
+                 (list (ll-ty p) p))
+               ",")))
+;; /Memory
+
+;; Misc
+(define-ll-expr (call-external res-ty fn-ptr-val args)
+  #:ty res-ty
+  #:fmt (list "call" res-ty
+              (vector
+               fn-ptr-val
+               "("
+               (fmt:between
+                (for/list ([p (in-list args)])
+                  (cons (ll-ty p) p))
+                ",")
+               ")")))
+;; /Misc
+
+(define-syntax (define-ll-top stx)
+  (syntax-parse stx
+    [(_ (name:id arg:id ...)
+        #:fmt format-e:expr)
+     (with-syntax ([top:name (format-id #'name "top:~a" #'name)])
+       (syntax/loc stx
+         (struct top:name (arg ...)
+           #:methods gen:ll-formatable
+           [(define (ll-format v)
+              (match-define (top:name arg ...) v)
+              format-e)])))]))
+
+(define-ll-top (variable name val)
+  ;; xxx private unnamed_addr constant
+  #:fmt (list name "=" (ll-ty val) val))
+(define-ll-top (declare-external ret-ty name param-tys)
+  #:fmt (list "declare" ret-ty (vector name "(" (fmt:between param-tys ",") ")")))
+(define-ll-top (define-external ret-ty name params body)
+  #:fmt (list "define" ret-ty
+              (vector name "(" (fmt:between params ",") ")")
+              ;; xxx body to cfg
+              "{"
+              (fmt:indent body)
+              "}"))
+
+(struct ll-module (l)
+  #:methods gen:ll-formatable
+  [(define (ll-format v)
+     (match-define (ll-module l) v)
+     (fmt:between l (fmt:newline)))])
+
 (module+ test
   (ll-out
-   (list
-    "@.str = private unnamed_addr constant "
-    (ty:array 13 (ty:i8)) (val:string "Hello World!\n\0") "\n"
+   (ll-module
+    (list
+     (top:variable "@.str" (val:string "Hello World!\n\0"))
+     (top:declare-external (ty:i32) "@puts" (list (ty:ptr (ty:i8))))
 
-    "declare " (ty:i32) " @puts(" (ty:ptr (ty:i8)) " nocapture) nounwind" "\n"
+     (top:define-external
+      (ty:i32) "@main" (list)
+      (list
+       (inst:define "%cast210"
+                    (expr:get-element-ptr
+                     (expr:global (ty:array 13 (ty:i8)) "@.str")
+                     (list (val:i64 0)
+                           (val:i64 0))))
+       (inst:define "%putscode"
+                    (expr:call-external
+                     (ty:i32) "@puts"
+                     (list (expr:local (ty:ptr (ty:i8)) "%cast210"))))
+       (inst:ret-val (val:i32 0))))
 
-    "define " (ty:i32) " @main() {
-    %cast210 = getelementptr " (ty:ptr (ty:array 13 (ty:i8))) " @.str, " (ty:i64) (val:i64 0)", " (ty:i64) (val:i64 0)"
-    call "(ty:i32)" @puts("(ty:ptr (ty:i8))" %cast210)
-    ret "(ty:i32) (val:i32 0)"
-   }" "\n"
+     (top:define-external
+      (ty:i32) "@square_unsigned" (list (cons (ty:i32) "%a"))
+      (list
+       (inst:define "%1" (expr:mul (ty:i32) "%a" "%a"))
+       (inst:ret-val (expr:local (ty:i32) "%1"))))
 
-    "define "(ty:i32)" @square_unsigned("(ty:i32)" %a) {
-    %1 = mul "(ty:i32)" %a, %a
-    ret "(ty:i32)" %1
-   }" "\n"
-
-    "define "(ty:vector 4 (ty:i32)) "@multiply_four("(ty:vector 4 (ty:i32))" %a, "(ty:vector 4 (ty:i32))" %b) {
-    %1 = mul "(ty:vector 4 (ty:i32))" %a,  %b
-    ret "(ty:vector 4 (ty:i32))" %1
-   }" "\n")))
+     (top:define-external
+      (ty:vector 4 (ty:i32)) "@multiply_four"
+      (list (cons (ty:vector 4 (ty:i32)) "%a")
+            (cons (ty:vector 4 (ty:i32)) "%b"))
+      (list (inst:define "%1" (expr:mul (ty:vector 4 (ty:i32)) "%a" "%b"))
+            (inst:ret-val (expr:local (ty:vector 4 (ty:i32)) "%1"))))))))
 
 (module+ notes
   '[Instructions
-    [Terminator
-     (ret value-or-void)
-     (cbr cond:i1 true:label false:label)
-     (ubr dest:label)
-     (switch value:int
-             default:label
-             [val:constant dest:label]
-             ...)]
     [Binary
      ;; xxx replace these with the (unsigned/signed) "with overflow" versions
      (add left right)
@@ -235,8 +387,7 @@
     [Memory
      (alloca ty)
      (load ptr)
-     (store val ptr)
-     (get-element-ptr ptr idx ...+)]
+     (store val ptr)]
     [Conversion
      (trunc val to-ty)
      (zext val to-ty)
@@ -258,13 +409,8 @@
      ;; xxx may only appear at the start of a block
      (phi [val label] ...)
      (select cond true false)
-     ;; xxx external means ccc
-     (call:external fnptr arg ...)
      ;; xxx internal means fastcc
-     (call:internal fnptr arg ...)
-     ;; xxx really a terminator (although ret has to come next) or don't
-     ;; and always emit things with tailcall flag for internal
-     (tail-call:internal fnptr arg ...)]]
+     (call:internal fnptr arg ...)]]
 
   ;; xxx fma
   ;; xxx masked vector load/store
