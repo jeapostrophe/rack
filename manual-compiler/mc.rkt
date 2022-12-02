@@ -6,6 +6,8 @@
          racket/generic
          racket/match)
 
+;; xxx good ideas: http://llvm.org/devmtg/2015-10/slides/GroffLattner-SILHighLevelIR.pdf
+
 (define-generics ll-formatable
   (ll-format ll-formatable))
 
@@ -407,6 +409,7 @@
                          ueq ugt uge ult ule une urd true)]
            left right)
      ;; xxx may only appear at the start of a block
+     ;; xxx just use basic block arguments
      (phi [val label] ...)
      (select cond true false)
      ;; xxx internal means fastcc
